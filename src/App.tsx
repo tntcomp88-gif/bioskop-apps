@@ -201,7 +201,7 @@ export default function App() {
     setMovies(prev => {
       const next = typeof update === 'function' ? update(prev) : update;
       const added = next.filter(n => !prev.some(p => p.id === n.id));
-      const removed = prev.filter(p => !next.some(n => n.id === n.id));
+      const removed = prev.filter(p => !next.some(n => n.id === p.id));
       
       added.forEach(m => saveMovieToFirestore(m));
       removed.forEach(m => deleteMovieFromFirestore(m.id));
@@ -218,6 +218,8 @@ export default function App() {
           saveCinemaToFirestore(c);
         }
       });
+      const removed = prev.filter(p => !next.some(n => n.id === p.id));
+      removed.forEach(c => deleteCinemaFromFirestore(c.id));
       return next;
     });
   };
@@ -282,15 +284,17 @@ export default function App() {
         try {
           snap = await getDocs(collection(db, colName));
         } catch (getErr) {
+          console.error(`Failed to get collection ${colName}:`, getErr);
           handleFirestoreError(getErr, OperationType.GET, colName);
-          return;
+          continue; // Go to next collection
         }
         for (const docSnap of snap.docs) {
           try {
             await deleteDoc(doc(db, colName, docSnap.id));
           } catch (delErr) {
+            console.error(`Failed to delete doc ${docSnap.id} in ${colName}:`, delErr);
             handleFirestoreError(delErr, OperationType.DELETE, `${colName}/${docSnap.id}`);
-            return;
+            // Continue deleting others in collection
           }
         }
       } catch (err) {

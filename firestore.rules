@@ -91,7 +91,7 @@ service cloud.firestore {
       allow read: if true;
       allow create: if isValidUser(request.resource.data);
       allow update: if isValidUser(request.resource.data);
-      allow delete: if false;
+      allow delete: if true;
     }
 
     // 2. Movies collection
