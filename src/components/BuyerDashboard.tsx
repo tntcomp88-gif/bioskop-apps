@@ -17,6 +17,7 @@ interface BuyerDashboardProps {
   setVouchers: React.Dispatch<React.SetStateAction<Voucher[]>>;
   onOpenReceipt: (booking: Booking) => void;
   branding: AppBranding;
+  onUpdateUser: (updatedFields: Partial<User>) => void;
 }
 
 export default function BuyerDashboard({
@@ -30,7 +31,8 @@ export default function BuyerDashboard({
   vouchers,
   setVouchers,
   onOpenReceipt,
-  branding
+  branding,
+  onUpdateUser
 }: BuyerDashboardProps) {
 
   const [activeSubTab, setActiveSubTab] = useState<'catalog' | 'history' | 'profile'>('catalog');
@@ -61,6 +63,13 @@ export default function BuyerDashboard({
   const [isWalletModalOpen, setIsWalletModalOpen] = useState<boolean>(false);
   const [voucherCodeInput, setVoucherCodeInput] = useState<string>('');
   const [redeemingVoucherError, setRedeemingVoucherError] = useState<string>('');
+
+  useEffect(() => {
+    setBuyerName(currentUser.name);
+    setBuyerEmail(currentUser.email);
+    setBuyerPhone(currentUser.phone || '');
+    setBuyerBalance(currentUser.balance);
+  }, [currentUser]);
 
   // Checkout Discount Code System
   const [discountCodeInput, setDiscountCodeInput] = useState<string>('');
@@ -150,7 +159,7 @@ export default function BuyerDashboard({
     setTimeout(() => setSuccessAlert(''), 5500);
   };
   
-  // Persist updated user state to localStorage
+  // Persist updated user state to localStorage and Firestore
   const updateUserData = (updatedFields: Partial<User>) => {
     const updatedUser = { ...currentUser, ...updatedFields };
     localStorage.setItem('cinema_current_user', JSON.stringify(updatedUser));
@@ -165,6 +174,9 @@ export default function BuyerDashboard({
         localStorage.setItem('cinema_registered_users', JSON.stringify(registeredUsers));
       }
     }
+
+    // Pass the state update back to the parent to trigger React state and Firestore sync!
+    onUpdateUser(updatedFields);
   };
 
   const handleUpdateProfile = (e: React.FormEvent) => {
@@ -1243,7 +1255,6 @@ export default function BuyerDashboard({
                   <div className="relative">
                     <input
                       type="text"
-                      maxLength={14}
                       value={voucherCodeInput}
                       onChange={(e) => setVoucherCodeInput(e.target.value)}
                       placeholder="CINE-XXXX-XXXX"

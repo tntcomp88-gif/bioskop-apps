@@ -268,6 +268,27 @@ export default function App() {
     });
   };
 
+  const handleUpdateUser = async (updatedFields: Partial<User>) => {
+    if (!currentUser) return;
+    const nextUser = { ...currentUser, ...updatedFields };
+    setCurrentUser(nextUser);
+    localStorage.setItem('cinema_current_user', JSON.stringify(nextUser));
+
+    // For registers offline database fallback
+    const savedUsersRaw = localStorage.getItem('cinema_registered_users');
+    if (savedUsersRaw) {
+      const registeredUsers: User[] = JSON.parse(savedUsersRaw);
+      const idx = registeredUsers.findIndex(u => u.id === currentUser.id);
+      if (idx !== -1) {
+        registeredUsers[idx] = { ...registeredUsers[idx], ...updatedFields };
+        localStorage.setItem('cinema_registered_users', JSON.stringify(registeredUsers));
+      }
+    }
+
+    // Persist the changes directly to the Firestore collection
+    await saveUserToFirestore(nextUser);
+  };
+
   const handleClearDatabase = async () => {
     // 1. Clear Local React States
     setMovies([]);
@@ -407,6 +428,7 @@ export default function App() {
           setVouchers={wrappedSetVouchers}
           onOpenReceipt={(booking) => setActiveReceipt(booking)}
           branding={branding}
+          onUpdateUser={handleUpdateUser}
         />
       )}
 
