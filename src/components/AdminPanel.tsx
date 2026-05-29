@@ -22,6 +22,8 @@ interface AdminPanelProps {
   setVouchers: React.Dispatch<React.SetStateAction<Voucher[]>>;
   branding: AppBranding;
   setBranding: React.Dispatch<React.SetStateAction<AppBranding>>;
+  onClearDatabase: () => Promise<void>;
+  onSeedDatabase: () => Promise<void>;
 }
 
 export default function AdminPanel({
@@ -37,7 +39,9 @@ export default function AdminPanel({
   vouchers,
   setVouchers,
   branding,
-  setBranding
+  setBranding,
+  onClearDatabase,
+  onSeedDatabase
 }: AdminPanelProps) {
   
   const [activeTab, setActiveTab ] = useState<'profile' | 'cinemas' | 'movies' | 'schedules' | 'reports' | 'financial' | 'vouchers' | 'app-settings'>('cinemas');
@@ -1327,7 +1331,7 @@ export default function AdminPanel({
                     <span>Unduh Data Pemesan Kursi Bioskop (H-1)</span>
                   </h2>
                   <p className="text-xs text-slate-400 mt-1">
-                    Aturan Bisnis: Data prapemesanan kursi hanya dapat diunduh selama pemutaran film masih dalam status <strong>H-1 (minimal satu hari sebelum jam & tanggal tayang)</strong> dibandingkan waktu hari ini (Simulasi: 26 Mei 2026). Jadwal penayangan yang akan tayang hari ini (H-0) atau yang telah lampau akan dikunci demi validitas integrasi tiket masuk.
+                    Aturan Bisnis: Data prapemesanan kursi hanya dapat diunduh selama pemutaran film masih dalam status <strong>H-1 (minimal satu hari sebelum jam & tanggal tayang)</strong> dibandingkan waktu hari ini. Jadwal penayangan yang akan tayang hari ini (H-0) atau yang telah lampau akan dikunci demi validitas integrasi tiket masuk.
                   </p>
                 </div>
 
@@ -1956,39 +1960,6 @@ export default function AdminPanel({
                         Atur parameter tagihan, estimasi laba kotor, royalti distributor, utilitas operasional, dan unduh rekapitulasi data keuangan per hari.
                       </p>
                     </div>
-                    <button
-                      type="button"
-                      onClick={() => {
-                        // 1. Clear Bookings database
-                        localStorage.setItem('cinema_db_bookings', JSON.stringify([]));
-                        
-                        // 2. Clear Registered Users list
-                        localStorage.setItem('cinema_registered_users', JSON.stringify([]));
-                        
-                        // 3. Reset vouchers to empty so user can generate fresh voucher codes themselves
-                        localStorage.setItem('cinema_db_vouchers', JSON.stringify([]));
-
-                        // 4. Clear/Reset Budi's wallet and currently logged in session balance to 150000
-                        const testBudi = { id: 'buyer-1', name: 'Budi Santoso', email: 'budi@gmail.com', role: 'buyer', balance: 150000, phone: '081122334455' };
-                        const savedCurrent = localStorage.getItem('cinema_current_user');
-                        if (savedCurrent) {
-                          const parsed = JSON.parse(savedCurrent);
-                          if (parsed.id === 'buyer-1') {
-                            localStorage.setItem('cinema_current_user', JSON.stringify(testBudi));
-                          }
-                        }
-                        
-                        window.dispatchEvent(new Event('storage'));
-                        triggerFeedback('success', 'Database penjualan dikosongkan & Saldo Budi diset ke Rp 150.000! Halaman memuat ulang...');
-                        setTimeout(() => {
-                          window.location.reload();
-                        }, 1200);
-                      }}
-                      className="shrink-0 inline-flex items-center gap-2 px-3.5 py-2 bg-gradient-to-r from-red-600 to-red-700 hover:from-red-700 hover:to-red-800 text-white text-xs font-bold rounded-xl transition-all cursor-pointer shadow-sm hover:shadow"
-                    >
-                      <RotateCcw className="w-4 h-4" />
-                      <span>Kosongkan Database & Set Saldo Budi Rp 150.000</span>
-                    </button>
                   </div>
 
                   {/* SETTINGS CARD FOR CUSTOM BILLING PARAMETERS */}
@@ -2197,7 +2168,7 @@ export default function AdminPanel({
                         </span>
                       </div>
                       <div className="text-[10px] text-blue-150 leading-relaxed z-10 font-sans">
-                        Aliran dana masuk via klaim voucher kasir <strong>(Rp {totalVoucherRedeemedValue.toLocaleString('id-ID')})</strong> plus kredit topup uji coba. <span className="underline decoration-dotted text-amber-300">Klik untuk melihat rincian sumber dana</span>
+                        Aliran dana masuk via klaim voucher kasir <strong>(Rp {totalVoucherRedeemedValue.toLocaleString('id-ID')})</strong> plus top-up saldo mandiri. <span className="underline decoration-dotted text-amber-300">Klik untuk melihat rincian sumber dana</span>
                       </div>
                     </button>
 
@@ -2294,7 +2265,7 @@ export default function AdminPanel({
                                   <div className="text-[10px] text-slate-400">budi@gmail.com</div>
                                 </td>
                                 <td className="p-3 font-mono font-bold text-slate-800">Rp 150.000</td>
-                                <td className="p-3 text-slate-400 italic">Saldo awal bawaan simulasi</td>
+                                <td className="p-3 text-slate-400 italic">Saldo awal registrasi pengguna</td>
                                 <td className="p-3 text-right">
                                   <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-slate-100 text-slate-500 border border-slate-200">
                                     Sistem Default
@@ -2371,7 +2342,7 @@ export default function AdminPanel({
                                             <td className="p-3 font-mono text-slate-500">Penyesuaian Manual</td>
                                             <td className="p-3 font-bold text-slate-700">Ledger Penyelaras</td>
                                             <td className="p-3 font-mono font-bold text-amber-700">Rp {diff.toLocaleString('id-ID')}</td>
-                                            <td className="p-3 text-slate-450 italic">Kredit simulasi topup / testing</td>
+                                            <td className="p-3 text-slate-450 italic">Top-up dompet digital / mandiri</td>
                                             <td className="p-3 text-right">
                                               <span className="inline-flex items-center px-1.5 py-0.5 rounded text-[9px] font-black uppercase bg-amber-50 text-amber-600 border border-amber-200">
                                                 Penyeimbang Sistem
@@ -3155,6 +3126,64 @@ export default function AdminPanel({
                   </div>
 
                 </div>
+
+                {/* MASTER CLOUD DATA MANAGEMENT CENTER (ZONA BAHAYA) */}
+                <div id="danger-zone-db" className="border border-red-200 bg-red-50/20 rounded-2xl p-6 mt-8 space-y-4">
+                  <div className="flex items-start gap-3">
+                    <Trash2 className="w-6 h-6 text-red-600 shrink-0 mt-0.5" />
+                    <div>
+                      <h4 className="font-display font-semibold text-sm text-slate-800">
+                        Pusat Kendali & Reset Database Cloud (Zona Bahaya)
+                      </h4>
+                      <p className="text-xs text-slate-500 mt-1">
+                        Gunakan tombol di bawah ini untuk mengosongkan seluruh database bioskop secara cloud terintegrasi (Firebase Firestore). Tindakan ini bersifat permanen dan akan menghapus semua film, teater, jadwal penayangan, riwayat transaksi pemesanan tiket, daftar voucher, serta akun pembeli terdaftar secara instan.
+                      </p>
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap gap-3 pt-2">
+                    <button
+                      id="btn-clear-db"
+                      type="button"
+                      onClick={async () => {
+                        const verified = confirm("PERINGATAN KRITIKAL! Apakah Anda yakin ingin MENGOSONGKAN SELURUH DATABASE bioskop (termasuk katalog film)? Semua data di Firestore akan dibersihkan secara total.");
+                        if (verified) {
+                          try {
+                            await onClearDatabase();
+                            triggerFeedback('success', 'Database berhasil dikosongkan secara total! Semua data Firestore telah dibersihkan.');
+                          } catch (err) {
+                            triggerFeedback('error', 'Gagal membersihkan database: ' + String(err));
+                          }
+                        }
+                      }}
+                      className="bg-red-600 hover:bg-red-750 text-white font-display font-medium px-5 py-3 text-xs rounded-xl shadow-md hover:shadow-lg transition-all active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+                    >
+                      <Trash2 className="w-4 h-4" />
+                      <span>KOSONGKAN SEMUA DATABASE (BLANKO)</span>
+                    </button>
+
+                    <button
+                      id="btn-seed-db"
+                      type="button"
+                      onClick={async () => {
+                        const verified = confirm("Apakah Anda yakin ingin mengatur ulang database ke status sampel awal (Seed Data Default)? Semua transaksi aktif saat ini akan dibersihkan.");
+                        if (verified) {
+                          try {
+                            await onSeedDatabase();
+                            triggerFeedback('success', 'Database berhasil di-reset ke sampel data default bawaan sistem!');
+                          } catch (err) {
+                            triggerFeedback('error', 'Gagal memuat sampel data: ' + String(err));
+                          }
+                        }
+                      }}
+                      className="bg-white border border-slate-205 hover:bg-slate-50 text-slate-700 font-display font-medium px-5 py-3 text-xs rounded-xl transition-all active:scale-[0.98] cursor-pointer flex items-center gap-1.5"
+                    >
+                      <RotateCcw className="w-4 h-4 text-slate-500" />
+                      <span>RESET DATABASE KE DEFAULT (LOAD SAMPLES)</span>
+                    </button>
+                  </div>
+                </div>
+
               </div>
             )}
 

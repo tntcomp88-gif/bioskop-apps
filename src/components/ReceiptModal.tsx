@@ -178,7 +178,7 @@ export default function ReceiptModal({ booking, onClose }: ReceiptModalProps) {
             className="flex-1 py-3 bg-blue-900 hover:bg-blue-800 text-white rounded-xl text-xs font-display font-bold shadow-md cursor-pointer active:scale-95 transition-all flex items-center justify-center gap-1.5"
           >
             <Printer className="w-4 h-4" />
-            <span>Simulasi Cetak Tiket</span>
+            <span>Cetak & Unduh Tiket (PDF)</span>
           </button>
           
           <button
@@ -197,6 +197,6 @@ export default function ReceiptModal({ booking, onClose }: ReceiptModalProps) {
   // Quick helper to override print triggers safely
   function onPrint() {
     handlePrint();
-    alert("Tiket berhasil dicetak! (Simulasi file PDF telah terunggah ke sistem memori perangkat).");
+    alert("Tiket berhasil disimpan! File e-ticket PDF Anda telah diunduh ke memori perangkat.");
   }
 }

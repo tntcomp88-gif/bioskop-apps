@@ -16,9 +16,11 @@ import {
   saveVoucherToFirestore,
   deleteVoucherFromFirestore,
   saveBrandingToFirestore,
-  saveUserToFirestore
+  saveUserToFirestore,
+  handleFirestoreError,
+  OperationType
 } from './firebase';
-import { onSnapshot, collection, doc } from 'firebase/firestore';
+import { onSnapshot, collection, doc, deleteDoc, getDocs } from 'firebase/firestore';
 import LoginScreen from './components/LoginScreen';
 import AdminPanel from './components/AdminPanel';
 import BuyerDashboard from './components/BuyerDashboard';
@@ -83,12 +85,9 @@ export default function App() {
       snapshot.forEach(docSnap => {
         docs.push(docSnap.data() as Movie);
       });
-      if (docs.length > 0) {
-        setMovies(docs);
-      } else {
-        // Automatically seed remote Firestore database if blank
-        INITIAL_MOVIES.forEach(m => saveMovieToFirestore(m));
-      }
+      setMovies(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'movies');
     });
 
     // 2. Cinemas Listener
@@ -97,11 +96,9 @@ export default function App() {
       snapshot.forEach(docSnap => {
         docs.push(docSnap.data() as Cinema);
       });
-      if (docs.length > 0) {
-        setCinemas(docs);
-      } else {
-        INITIAL_CINEMAS.forEach(c => saveCinemaToFirestore(c));
-      }
+      setCinemas(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'cinemas');
     });
 
     // 3. Schedules Listener
@@ -110,11 +107,9 @@ export default function App() {
       snapshot.forEach(docSnap => {
         docs.push(docSnap.data() as Schedule);
       });
-      if (docs.length > 0) {
-        setSchedules(docs);
-      } else {
-        INITIAL_SCHEDULES.forEach(s => saveScheduleToFirestore(s));
-      }
+      setSchedules(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'schedules');
     });
 
     // 4. Bookings Listener
@@ -126,6 +121,8 @@ export default function App() {
       // Sort bookings chronologically descending (latest first)
       docs.sort((a, b) => new Date(b.bookingDate).getTime() - new Date(a.bookingDate).getTime());
       setBookings(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'bookings');
     });
 
     // 5. Vouchers Listener
@@ -135,15 +132,17 @@ export default function App() {
         docs.push(docSnap.data() as Voucher);
       });
       setVouchers(docs);
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'vouchers');
     });
 
-    // 6. Branding Configuration Listener
-    const unsubBranding = onSnapshot(collection(db, 'branding'), (snapshot) => {
-      snapshot.forEach(docSnap => {
-        if (docSnap.id === 'config') {
-          setBranding(docSnap.data() as AppBranding);
-        }
-      });
+    // 6. Branding Configuration Listener (directly query the config document)
+    const unsubBranding = onSnapshot(doc(db, 'branding', 'config'), (docSnap) => {
+      if (docSnap.exists()) {
+        setBranding(docSnap.data() as AppBranding);
+      }
+    }, (error) => {
+      handleFirestoreError(error, OperationType.GET, 'branding/config');
     });
 
     return () => {
@@ -165,6 +164,8 @@ export default function App() {
           setCurrentUser(updatedUser);
           localStorage.setItem('cinema_current_user', JSON.stringify(updatedUser));
         }
+      }, (error) => {
+        handleFirestoreError(error, OperationType.GET, `users/${currentUser.id}`);
       });
       return () => unsubUser();
     }
@@ -265,6 +266,81 @@ export default function App() {
     });
   };
 
+  const handleClearDatabase = async () => {
+    // 1. Clear Local React States
+    setMovies([]);
+    setCinemas([]);
+    setSchedules([]);
+    setBookings([]);
+    setVouchers([]);
+
+    // 2. Delete all docs in Firestore collections
+    const collections = ['movies', 'cinemas', 'schedules', 'bookings', 'vouchers', 'users'];
+    for (const colName of collections) {
+      try {
+        let snap;
+        try {
+          snap = await getDocs(collection(db, colName));
+        } catch (getErr) {
+          handleFirestoreError(getErr, OperationType.GET, colName);
+          return;
+        }
+        for (const docSnap of snap.docs) {
+          try {
+            await deleteDoc(doc(db, colName, docSnap.id));
+          } catch (delErr) {
+            handleFirestoreError(delErr, OperationType.DELETE, `${colName}/${docSnap.id}`);
+            return;
+          }
+        }
+      } catch (err) {
+        console.error(`Error clearing collection ${colName}:`, err);
+      }
+    }
+
+    // 3. Clear Local Storage legacy sandboxes
+    localStorage.removeItem('cinema_db_movies');
+    localStorage.removeItem('cinema_db_cinemas');
+    localStorage.removeItem('cinema_db_schedules');
+    localStorage.removeItem('cinema_db_bookings');
+    localStorage.removeItem('cinema_db_vouchers');
+    localStorage.removeItem('cinema_registered_users');
+    localStorage.removeItem('cinema_user_passwords');
+  };
+
+  const handleSeedDatabase = async () => {
+    // Clear first to avoid duplicate collisions
+    await handleClearDatabase();
+
+    // Seed default structures in order
+    for (const m of INITIAL_MOVIES) {
+      await saveMovieToFirestore(m);
+    }
+    for (const c of INITIAL_CINEMAS) {
+      await saveCinemaToFirestore(c);
+    }
+    for (const s of INITIAL_SCHEDULES) {
+      await saveScheduleToFirestore(s);
+    }
+
+    // Primary test account Budi Santoso
+    const defaultBudi = {
+      id: 'buyer-1',
+      name: 'Budi Santoso',
+      email: 'budi@gmail.com',
+      role: 'buyer',
+      balance: 150000,
+      phone: '081122334455',
+      password: 'budi123'
+    };
+    await saveUserToFirestore(defaultBudi as any);
+
+    // Save passwords to local storage for offline tolerance
+    const passwords: Record<string, string> = { 'budi@gmail.com': 'budi123' };
+    localStorage.setItem('cinema_user_passwords', JSON.stringify(passwords));
+    localStorage.setItem('cinema_registered_users', JSON.stringify([defaultBudi]));
+  };
+
   // Session token verifying and expire guards
   useEffect(() => {
     if (token) {
@@ -311,6 +387,8 @@ export default function App() {
           setVouchers={wrappedSetVouchers}
           branding={branding}
           setBranding={wrappedSetBranding}
+          onClearDatabase={handleClearDatabase}
+          onSeedDatabase={handleSeedDatabase}
         />
       ) : (
         <BuyerDashboard

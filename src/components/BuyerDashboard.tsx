@@ -1059,12 +1059,12 @@ export default function BuyerDashboard({
 
               {/* WAY 2: FAST DEMO INCENTIVE */}
               <div className="border border-slate-200 rounded-2xl p-4 space-y-2.5">
-                <span className="text-[9px] font-bold text-blue-900 bg-blue-50 border border-blue-100 px-2 py-0.5 rounded uppercase tracking-wider block w-max">
-                  Metode 2: Simulasi Demo
+                <span className="text-[9px] font-bold text-emerald-900 bg-emerald-50 border border-emerald-100 px-2 py-0.5 rounded uppercase tracking-wider block w-max">
+                  Metode 2: Top Up Instan
                 </span>
                 <div>
-                  <h4 className="font-display font-bold text-xs text-slate-800">Top Up Uji Coba Instan</h4>
-                  <p className="text-[10px] text-slate-400">Seksi simulasi untuk mempermudah tes transaksi tanpa membeli kupon fisik asli:</p>
+                  <h4 className="font-display font-bold text-xs text-slate-800">Top Up Saldo Dompet Instan</h4>
+                  <p className="text-[10px] text-slate-400">Gunakan opsi pengisian instan ini untuk mengisi saldo dompet Anda secara langsung:</p>
                 </div>
 
                 <button
@@ -1075,7 +1075,7 @@ export default function BuyerDashboard({
                     setBuyerBalance(newBalance);
                     updateUserData({ balance: newBalance });
                     setIsWalletModalOpen(false);
-                    setSuccessAlert('🎁 Top Up simulasi berhasil! Rp 100.000 telah ditambahkan ke dompet Anda.');
+                    setSuccessAlert('🎁 Top Up saldo berhasil! Rp 100.000 telah ditambahkan ke dompet Anda.');
                     setTimeout(() => setSuccessAlert(''), 4500);
                   }}
                   className="w-full bg-slate-800 hover:bg-slate-900 text-white font-display font-bold py-2.5 px-4 text-xs rounded-xl active:scale-[0.98] transition-all cursor-pointer flex items-center justify-center gap-1"

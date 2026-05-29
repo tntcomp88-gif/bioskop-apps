@@ -3,7 +3,7 @@ import { Shield, User, Lock, Mail, Phone, Sparkles, AlertCircle } from 'lucide-r
 import { generateJWT } from '../data';
 import { User as UserType, AppBranding } from '../types';
 
-import { db } from '../firebase';
+import { db, handleFirestoreError, OperationType } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface LoginScreenProps {
@@ -55,7 +55,13 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
       try {
         const emailLower = email.toLowerCase();
         const userRef = doc(db, 'users', emailLower);
-        const userSnap = await getDoc(userRef);
+        let userSnap;
+        try {
+          userSnap = await getDoc(userRef);
+        } catch (getErr) {
+          handleFirestoreError(getErr, OperationType.GET, `users/${emailLower}`);
+          return;
+        }
 
         if (userSnap.exists()) {
           const uData = userSnap.data();
@@ -88,7 +94,12 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
             phone: '081122334455',
             password: 'budi123'
           };
-          await setDoc(userRef, defaultBudi);
+          try {
+            await setDoc(userRef, defaultBudi);
+          } catch (setErr) {
+            handleFirestoreError(setErr, OperationType.WRITE, `users/${emailLower}`);
+            return;
+          }
 
           if (password !== 'budi123') {
             setError('Sandi / Password yang Anda masukkan salah.');
@@ -143,7 +154,13 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
     try {
       const emailLower = email.toLowerCase();
       const userRef = doc(db, 'users', emailLower);
-      const userSnap = await getDoc(userRef);
+      let userSnap;
+      try {
+        userSnap = await getDoc(userRef);
+      } catch (getErr) {
+        handleFirestoreError(getErr, OperationType.GET, `users/${emailLower}`);
+        return;
+      }
 
       if (userSnap.exists() || emailLower === 'budi@gmail.com') {
         setError('Email ini sudah terdaftar.');
@@ -160,7 +177,12 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
         password: password
       };
 
-      await setDoc(userRef, newBuyer);
+      try {
+        await setDoc(userRef, newBuyer);
+      } catch (setErr) {
+        handleFirestoreError(setErr, OperationType.WRITE, `users/${emailLower}`);
+        return;
+      }
 
       // Save to local storage for offline tolerance
       const savedUsersRaw = localStorage.getItem('cinema_registered_users');
@@ -202,7 +224,13 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
     try {
       const emailLower = email.toLowerCase();
       const userRef = doc(db, 'users', emailLower);
-      const userSnap = await getDoc(userRef);
+      let userSnap;
+      try {
+        userSnap = await getDoc(userRef);
+      } catch (getErr) {
+        handleFirestoreError(getErr, OperationType.GET, `users/${emailLower}`);
+        return;
+      }
 
       if (!userSnap.exists()) {
         setError('Akun dengan alamat email tersebut tidak ditemukan.');
@@ -228,7 +256,12 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
         ...uData,
         password: password
       };
-      await setDoc(userRef, updatedUser);
+      try {
+        await setDoc(userRef, updatedUser);
+      } catch (setErr) {
+        handleFirestoreError(setErr, OperationType.WRITE, `users/${emailLower}`);
+        return;
+      }
 
       // Local storage sync as well
       const savedPasswordsRaw = localStorage.getItem('cinema_user_passwords');
