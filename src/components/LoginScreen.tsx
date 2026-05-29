@@ -3,7 +3,7 @@ import { Shield, User, Lock, Mail, Phone, Sparkles, AlertCircle } from 'lucide-r
 import { generateJWT } from '../data';
 import { User as UserType, AppBranding } from '../types';
 
-import { db, handleFirestoreError, OperationType } from '../firebase';
+import { db, handleFirestoreError, OperationType, cleanUndefined } from '../firebase';
 import { doc, getDoc, setDoc } from 'firebase/firestore';
 
 interface LoginScreenProps {
@@ -95,7 +95,7 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
             password: 'budi123'
           };
           try {
-            await setDoc(userRef, defaultBudi);
+            await setDoc(userRef, cleanUndefined(defaultBudi));
           } catch (setErr) {
             handleFirestoreError(setErr, OperationType.WRITE, `users/${emailLower}`);
             return;
@@ -178,7 +178,7 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
       };
 
       try {
-        await setDoc(userRef, newBuyer);
+        await setDoc(userRef, cleanUndefined(newBuyer));
       } catch (setErr) {
         handleFirestoreError(setErr, OperationType.WRITE, `users/${emailLower}`);
         return;
@@ -257,7 +257,7 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
         password: password
       };
       try {
-        await setDoc(userRef, updatedUser);
+        await setDoc(userRef, cleanUndefined(updatedUser));
       } catch (setErr) {
         handleFirestoreError(setErr, OperationType.WRITE, `users/${emailLower}`);
         return;

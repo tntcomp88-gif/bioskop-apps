@@ -85,6 +85,11 @@ export default function AdminPanel({
   const [editAisleWidth, setEditAisleWidth] = useState<number>(1);
   const [brushMode, setBrushMode] = useState<'block' | 'remove'>('block');
 
+  // Add New Cinema State
+  const [newCinemaName, setNewCinemaName] = useState<string>('');
+  const [newCinemaRows, setNewCinemaRows] = useState<number>(8);
+  const [newCinemaCols, setNewCinemaCols] = useState<number>(10);
+
   // Add Movie Form State
   const [newTitle, setNewTitle] = useState<string>('');
   const [newDirector, setNewDirector] = useState<string>('');
@@ -112,6 +117,19 @@ export default function AdminPanel({
     setFeedback({ type, msg });
     setTimeout(() => setFeedback(null), 4000);
   };
+
+  // Synchronize selectedCinemaId when cinemas list changes
+  useEffect(() => {
+    if (cinemas.length > 0) {
+      const exists = cinemas.some(c => c.id === selectedCinemaId);
+      if (!exists || !selectedCinemaId) {
+        setSelectedCinemaId(cinemas[0].id);
+      }
+    } else {
+      setSelectedCinemaId('');
+      setEditCinemaName('');
+    }
+  }, [cinemas, selectedCinemaId]);
 
   // Cinema Editor Loader
   useEffect(() => {
@@ -168,6 +186,39 @@ export default function AdminPanel({
       return c;
     }));
     triggerFeedback('success', 'Pengaturan Cinema dan Dimensi berhasil disimpan!');
+  };
+
+  const handleCreateCinema = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newCinemaName.trim()) {
+      triggerFeedback('error', 'Nama cinema tidak boleh kosong!');
+      return;
+    }
+    const newId = `cinema-${Date.now()}`;
+    const newCinema: Cinema = {
+      id: newId,
+      name: newCinemaName.trim(),
+      rows: Number(newCinemaRows),
+      cols: Number(newCinemaCols),
+      forbiddenSeats: [],
+      removedSeats: [],
+      aisleAfterCol: 0,
+      aisleWidth: 1,
+    };
+    setCinemas(prev => [...prev, newCinema]);
+    setSelectedCinemaId(newId);
+    setNewCinemaName('');
+    triggerFeedback('success', `Berhasil menambahkan Cinema Studio baru "${newCinema.name}"!`);
+  };
+
+  const handleDeleteCinema = (cinemaId: string) => {
+    const cinemaOb = cinemas.find(c => c.id === cinemaId);
+    if (!cinemaOb) return;
+    const verified = confirm(`Apakah Anda yakin ingin menghapus "${cinemaOb.name}"? Tanyangan/jadwal film yang terhubung dengan studio ini mungkin akan ikut tidak valid.`);
+    if (verified) {
+      setCinemas(prev => prev.filter(c => c.id !== cinemaId));
+      triggerFeedback('success', `Berhasil menghapus studio "${cinemaOb.name}".`);
+    }
   };
 
   const handleToggleSeatForbidden = (rowLetter: string, colNum: number) => {
@@ -828,7 +879,146 @@ export default function AdminPanel({
                   </p>
                 </div>
 
-                 {/* Selection & Name Input form */}
+                {cinemas.length === 0 ? (
+                  <div className="border border-dashed border-slate-350 rounded-2xl p-8 text-center bg-slate-50/50 space-y-4">
+                    <Grid className="w-10 h-10 text-slate-300 mx-auto" />
+                    <div>
+                      <h3 className="font-display font-semibold text-sm text-slate-800">Cinema Studio Belum Tersedia</h3>
+                      <p className="text-xs text-slate-450 mt-1 max-w-sm mx-auto">
+                        Database studio cinema saat ini kosong karena database dikosongkan. Silakan muat contoh data awal bawaan sistem secara instan, atau buat studio baru untuk memulai.
+                      </p>
+                    </div>
+                    <div className="flex flex-wrap items-center justify-center gap-3 pt-2">
+                      <button
+                        type="button"
+                        onClick={async () => {
+                          try {
+                            await onSeedDatabase();
+                            triggerFeedback('success', 'Berhasil memuat contoh data default!');
+                          } catch (err) {
+                            triggerFeedback('error', 'Gagal memuat contoh data: ' + String(err));
+                          }
+                        }}
+                        className="bg-slate-100 hover:bg-slate-200 text-slate-700 border border-slate-205 text-xs font-semibold px-4 py-2.5 rounded-lg cursor-pointer transition-all flex items-center gap-1.5"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5 text-slate-500" />
+                        <span>Muat Contoh Data Default</span>
+                      </button>
+                    </div>
+
+                    <div className="border-t border-slate-200/60 pt-6 mt-4">
+                      <h4 className="font-display font-semibold text-xs text-slate-700 uppercase tracking-wider mb-3">Buat Studio Baru Manual</h4>
+                      <form onSubmit={handleCreateCinema} className="grid grid-cols-1 sm:grid-cols-3 gap-3 max-w-xl mx-auto items-end">
+                        <div className="text-left">
+                          <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Nama Studio</label>
+                          <input
+                            required
+                            type="text"
+                            value={newCinemaName}
+                            onChange={(e) => setNewCinemaName(e.target.value)}
+                            placeholder="E.g., Studio 1 Executive"
+                            className="w-full bg-white border border-slate-200 py-2 px-2.5 text-xs rounded-lg outline-none focus:border-blue-900 font-sans"
+                          />
+                        </div>
+                        <div className="text-left">
+                          <label className="block text-[9px] font-bold text-slate-450 uppercase mb-1">Dimensi (Baris x Kolom)</label>
+                          <div className="grid grid-cols-2 gap-1.5">
+                            <input
+                              required
+                              type="number"
+                              min={4}
+                              max={12}
+                              value={newCinemaRows}
+                              onChange={(e) => setNewCinemaRows(Number(e.target.value))}
+                              placeholder="Baris"
+                              className="w-full bg-white border border-slate-200 py-2.5 px-1.5 text-center text-xs rounded-lg outline-none focus:border-blue-900 font-sans"
+                            />
+                            <input
+                              required
+                              type="number"
+                              min={4}
+                              max={16}
+                              value={newCinemaCols}
+                              onChange={(e) => setNewCinemaCols(Number(e.target.value))}
+                              placeholder="Kolom"
+                              className="w-full bg-white border border-slate-200 py-2.5 px-1.5 text-center text-xs rounded-lg outline-none focus:border-blue-900 font-sans"
+                            />
+                          </div>
+                        </div>
+                        <button
+                          type="submit"
+                          className="w-full py-2.5 bg-blue-900 hover:bg-blue-950 text-white rounded-lg text-xs font-bold cursor-pointer transition-all flex items-center justify-center gap-1.5 shadow"
+                        >
+                          <Plus className="w-4 h-4" />
+                          <span>Buat Studio</span>
+                        </button>
+                      </form>
+                    </div>
+                  </div>
+                ) : (
+                  <>
+                    {/* Collapsible New Cinema Creator */}
+                    <div className="bg-slate-50 border border-slate-100 rounded-xl p-4">
+                      <details className="group">
+                        <summary className="list-none flex items-center justify-between cursor-pointer font-display font-semibold text-xs text-slate-700 hover:text-slate-900 select-none">
+                          <span className="flex items-center gap-1.5 focus:outline-none col-span-12">
+                            <Plus className="w-4 h-4 text-blue-600 group-open:rotate-45 transition-transform" />
+                            <span>BUAT STUDIO / CINEMA BARU</span>
+                          </span>
+                          <span className="text-[10px] text-slate-400 font-normal group-open:hidden">Klik untuk membuat studio baru +</span>
+                          <span className="text-[10px] text-slate-400 font-normal hidden group-open:inline">Tutup formulir -</span>
+                        </summary>
+                        
+                        <form onSubmit={handleCreateCinema} className="grid grid-cols-1 md:grid-cols-12 gap-4 mt-4 pt-4 border-t border-slate-100 items-end">
+                          <div className="md:col-span-4">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Nama Studio Baru</label>
+                            <input
+                              required
+                              type="text"
+                              value={newCinemaName}
+                              onChange={(e) => setNewCinemaName(e.target.value)}
+                              placeholder="E.g., Studio 3 Ultra XD"
+                              className="w-full bg-white border border-slate-205 py-2.5 px-3 text-xs rounded-lg outline-none focus:border-blue-900 font-sans"
+                            />
+                          </div>
+                          <div className="md:col-span-3">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Jumlah Baris (4 - 12)</label>
+                            <input
+                              required
+                              type="number"
+                              min={4}
+                              max={12}
+                              value={newCinemaRows}
+                              onChange={(e) => setNewCinemaRows(Number(e.target.value))}
+                              className="w-full bg-white border border-slate-205 py-2.5 px-3 text-xs rounded-lg outline-none focus:border-blue-900 font-sans"
+                            />
+                          </div>
+                          <div className="md:col-span-3">
+                            <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Jumlah Kolom (4 - 16)</label>
+                            <input
+                              required
+                              type="number"
+                              min={4}
+                              max={16}
+                              value={newCinemaCols}
+                              onChange={(e) => setNewCinemaCols(Number(e.target.value))}
+                              className="w-full bg-white border border-slate-205 py-2.5 px-3 text-xs rounded-lg outline-none focus:border-blue-900 font-sans"
+                            />
+                          </div>
+                          <div className="md:col-span-2">
+                            <button
+                              type="submit"
+                              className="w-full py-2.5 bg-blue-900 hover:bg-blue-950 text-white rounded-lg text-xs font-bold cursor-pointer active:scale-[0.98] transition-all flex items-center justify-center gap-1 shadow"
+                            >
+                              <Plus className="w-3.5 h-3.5" />
+                              <span>Tambah Studio</span>
+                            </button>
+                          </div>
+                        </form>
+                      </details>
+                    </div>
+
+                     {/* Selection & Name Input form */}
                 <form onSubmit={handleUpdateCinemaSettings} className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-4">
                   <div className="grid grid-cols-1 sm:grid-cols-2 md:grid-cols-12 gap-4 items-end">
                     <div className="md:col-span-3">
@@ -1061,8 +1251,10 @@ export default function AdminPanel({
 
                   </div>
                 )}
-              </div>
+              </>
             )}
+          </div>
+        )}
 
             {/* TAB CONTENT: MANAGE MOVIES */}
             {activeTab === 'movies' && (

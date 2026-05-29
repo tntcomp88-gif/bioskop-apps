@@ -70,11 +70,32 @@ async function testConnection() {
 }
 testConnection();
 
+// Recursively strips out undefined properties from an object so Firestore won't throw an error
+export function cleanUndefined<T>(obj: T): T {
+  if (obj === null || obj === undefined) return obj;
+  if (Array.isArray(obj)) {
+    return obj.map(item => cleanUndefined(item)) as unknown as T;
+  }
+  if (typeof obj === 'object') {
+    const cleaned: any = {};
+    for (const key in obj) {
+      if (Object.prototype.hasOwnProperty.call(obj, key)) {
+        const val = (obj as any)[key];
+        if (val !== undefined) {
+          cleaned[key] = cleanUndefined(val);
+        }
+      }
+    }
+    return cleaned as T;
+  }
+  return obj;
+}
+
 // Highly-tuned helper routines to write objects into Firestore instantly with strict error catching
 export async function saveMovieToFirestore(movie: Movie) {
   const path = `movies/${movie.id}`;
   try {
-    await setDoc(doc(db, 'movies', movie.id), movie);
+    await setDoc(doc(db, 'movies', movie.id), cleanUndefined(movie));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -92,7 +113,7 @@ export async function deleteMovieFromFirestore(movieId: string) {
 export async function saveCinemaToFirestore(cinema: Cinema) {
   const path = `cinemas/${cinema.id}`;
   try {
-    await setDoc(doc(db, 'cinemas', cinema.id), cinema);
+    await setDoc(doc(db, 'cinemas', cinema.id), cleanUndefined(cinema));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -110,7 +131,7 @@ export async function deleteCinemaFromFirestore(cinemaId: string) {
 export async function saveScheduleToFirestore(schedule: Schedule) {
   const path = `schedules/${schedule.id}`;
   try {
-    await setDoc(doc(db, 'schedules', schedule.id), schedule);
+    await setDoc(doc(db, 'schedules', schedule.id), cleanUndefined(schedule));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -128,7 +149,7 @@ export async function deleteScheduleFromFirestore(scheduleId: string) {
 export async function saveBookingToFirestore(booking: Booking) {
   const path = `bookings/${booking.id}`;
   try {
-    await setDoc(doc(db, 'bookings', booking.id), booking);
+    await setDoc(doc(db, 'bookings', booking.id), cleanUndefined(booking));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -137,7 +158,7 @@ export async function saveBookingToFirestore(booking: Booking) {
 export async function saveVoucherToFirestore(voucher: Voucher) {
   const path = `vouchers/${voucher.id}`;
   try {
-    await setDoc(doc(db, 'vouchers', voucher.id), voucher);
+    await setDoc(doc(db, 'vouchers', voucher.id), cleanUndefined(voucher));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -155,7 +176,7 @@ export async function deleteVoucherFromFirestore(voucherId: string) {
 export async function saveUserToFirestore(user: User) {
   const path = `users/${user.id}`;
   try {
-    await setDoc(doc(db, 'users', user.id), user);
+    await setDoc(doc(db, 'users', user.id), cleanUndefined(user));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
@@ -165,7 +186,7 @@ export async function saveBrandingToFirestore(branding: AppBranding) {
   const path = 'branding/config';
   try {
     // Keep styling configs globally stored in a dedicated document
-    await setDoc(doc(db, 'branding', 'config'), branding);
+    await setDoc(doc(db, 'branding', 'config'), cleanUndefined(branding));
   } catch (err) {
     handleFirestoreError(err, OperationType.WRITE, path);
   }
