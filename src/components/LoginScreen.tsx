@@ -167,12 +167,14 @@ export default function LoginScreen({ onLoginSuccess, branding }: LoginScreenPro
         return;
       }
 
+      const startingBalance = branding.defaultBuyerBalance !== undefined ? branding.defaultBuyerBalance : 100000;
+
       const newBuyer: UserType & { password?: string } = {
         id: `buyer-${Date.now()}`,
         name,
         email: emailLower,
         role: 'buyer',
-        balance: 100000, // Initial balance
+        balance: startingBalance, // Initial balance from Admin config
         phone,
         password: password
       };

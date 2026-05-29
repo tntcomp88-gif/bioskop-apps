@@ -96,6 +96,8 @@ export default function AdminPanel({
   const [newGenre, setNewGenre] = useState<string>('');
   const [newSynopsis, setNewSynopsis] = useState<string>('');
   const [newPoster, setNewPoster] = useState<string>('');
+  const [newDiscountPercent, setNewDiscountPercent] = useState<number>(0);
+  const [newIsB1G1, setNewIsB1G1] = useState<boolean>(false);
 
   // Add Schedule Form State
   const [schedMovieId, setSchedMovieId] = useState<string>('');
@@ -108,6 +110,9 @@ export default function AdminPanel({
   const [customVoucherAmount, setCustomVoucherAmount] = useState<string>('');
   const [voucherQuantity, setVoucherQuantity] = useState<number>(5);
   const [voucherFilter, setVoucherFilter] = useState<'all' | 'active' | 'redeemed'>('all');
+  const [newVoucherType, setNewVoucherType] = useState<'topup' | 'discount'>('topup');
+  const [newVoucherDiscountPercent, setNewVoucherDiscountPercent] = useState<number>(0);
+  const [newVoucherTargetMovieId, setNewVoucherTargetMovieId] = useState<string>('');
   const [voucherSearch, setVoucherSearch] = useState<string>('');
   const [copiedCodeCode, setCopiedCodeCode] = useState<string | null>(null);
   const [printModalVouchers, setPrintModalVouchers] = useState<Voucher[] | null>(null);
@@ -216,7 +221,13 @@ export default function AdminPanel({
     if (!cinemaOb) return;
     const verified = confirm(`Apakah Anda yakin ingin menghapus "${cinemaOb.name}"? Tanyangan/jadwal film yang terhubung dengan studio ini mungkin akan ikut tidak valid.`);
     if (verified) {
-      setCinemas(prev => prev.filter(c => c.id !== cinemaId));
+      const remaining = cinemas.filter(c => c.id !== cinemaId);
+      setCinemas(remaining);
+      if (remaining.length > 0) {
+        setSelectedCinemaId(remaining[0].id);
+      } else {
+        setSelectedCinemaId('');
+      }
       triggerFeedback('success', `Berhasil menghapus studio "${cinemaOb.name}".`);
     }
   };
@@ -270,11 +281,13 @@ export default function AdminPanel({
       director: newDirector,
       genre: newGenre,
       synopsis: newSynopsis,
-      posterUrl: fallbackPoster
+      posterUrl: fallbackPoster,
+      discountPercent: newDiscountPercent || 0,
+      isB1G1: newIsB1G1
     };
 
     setMovies(prev => [...prev, newMovie]);
-    triggerFeedback('success', `Film "${newTitle}" berhasil ditambahkan ke katalog bioskop!`);
+    triggerFeedback('success', `Film "${newTitle}" berhasil ditambahkan ke katalog bioskop bersama promo diskon ${newDiscountPercent}% & status B1G1!`);
     
     // Clear forms
     setNewTitle('');
@@ -282,6 +295,8 @@ export default function AdminPanel({
     setNewGenre('');
     setNewSynopsis('');
     setNewPoster('');
+    setNewDiscountPercent(0);
+    setNewIsB1G1(false);
   };
 
   const handleDeleteMovie = (id: string) => {
@@ -338,8 +353,9 @@ export default function AdminPanel({
   const handleGenerateVouchers = (e: React.FormEvent) => {
     e.preventDefault();
     const finalAmount = customVoucherAmount ? Number(customVoucherAmount) : voucherAmount;
-    if (isNaN(finalAmount) || finalAmount <= 0) {
-      triggerFeedback('error', 'Silakan masukkan nominal voucher yang valid (di atas Rp 0)!');
+    
+    if (newVoucherType === 'topup' && (isNaN(finalAmount) || finalAmount <= 0)) {
+      triggerFeedback('error', 'Silakan masukkan nominal voucher top-up yang valid (di atas Rp 0)!');
       return;
     }
     if (voucherQuantity < 1 || voucherQuantity > 100) {
@@ -362,18 +378,23 @@ export default function AdminPanel({
     };
 
     for (let q = 0; q < voucherQuantity; q++) {
-      const code = `CINE-${randSequence()}-${randSequence()}`;
+      const code = newVoucherType === 'topup'
+        ? `TOPUP-${randSequence()}-${randSequence()}`
+        : `DISKON-${randSequence()}-${randSequence()}`;
       generated.push({
         id: `vch-${Date.now()}-${q}-${Math.floor(Math.random() * 1000)}`,
         code,
-        amount: finalAmount,
+        amount: newVoucherType === 'topup' ? finalAmount : (newVoucherDiscountPercent === 0 ? finalAmount : 0),
         isRedeemed: false,
-        createdAt: timestampStr
+        createdAt: timestampStr,
+        type: newVoucherType,
+        discountPercent: newVoucherType === 'discount' && newVoucherDiscountPercent > 0 ? newVoucherDiscountPercent : undefined,
+        targetMovieId: newVoucherType === 'discount' && newVoucherTargetMovieId ? newVoucherTargetMovieId : undefined
       });
     }
 
     setVouchers(prev => [...generated, ...prev]);
-    triggerFeedback('success', `Berhasil membuat ${voucherQuantity} voucher baru bernilai Rp ${finalAmount.toLocaleString('id-ID')} per voucher!`);
+    triggerFeedback('success', `Berhasil membuat ${voucherQuantity} voucher baru berjenis ${newVoucherType === 'topup' ? 'Top-up Kupon' : 'Kupon Sesi Diskon'}!`);
     setCustomVoucherAmount('');
   };
 
@@ -695,7 +716,7 @@ export default function AdminPanel({
 
           <div className="flex items-center gap-4">
             <span className="hidden md:block text-slate-400 text-xs font-medium">
-              Sesi: <span className="bg-slate-100 px-2.5 py-1 text-slate-600 border border-slate-200 rounded-md font-mono text-[10px]">simulated_auth_token_jwt</span>
+              Administrator: <span className="bg-slate-100 px-2.5 py-1 text-slate-600 border border-slate-200 rounded-md font-mono text-[10px] font-bold">{currentUser.email}</span>
             </span>
             <button
               onClick={onLogout}
@@ -849,11 +870,6 @@ export default function AdminPanel({
 
           {/* Action Content Box */}
           <main className="lg:col-span-9 bg-white border border-slate-150 rounded-2xl p-6 sm:p-8 min-h-[550px] shadow-sm relative">
-            
-            {/* Real-time status banner */}
-            <div className="absolute top-2 right-6 pt-1 text-[10px] text-slate-400 font-mono">
-              Simulated Server: <span className="text-blue-900 font-semibold uppercase">Active UTC 2026-05-26</span>
-            </div>
 
             {/* Timed Notification Feedback */}
             {feedback && (
@@ -1071,51 +1087,51 @@ export default function AdminPanel({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-x-4 gap-y-3 pt-3 border-t border-slate-200/60 items-end">
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
                         <span>🚧 Sekat Jalan 1</span>
-                        <span className="text-[9px] text-slate-400 font-normal lowercase">(0 = Tidak ada)</span>
+                        <span className="text-[9px] text-slate-400 font-normal lowercase">(0 = Tidak)</span>
                       </label>
                       <select
                         value={editAisleAfterCol}
                         onChange={(e) => setEditAisleAfterCol(Number(e.target.value))}
-                        className="w-full bg-white border border-slate-200 py-2.5 px-3 text-xs rounded-lg outline-none focus:border-blue-900"
+                        className="w-full bg-white border border-slate-200 py-2.5 px-2 text-xs rounded-lg outline-none focus:border-blue-900"
                       >
-                        <option value={0}>Tidak Ada Jalan</option>
+                        <option value={0}>Tidak Ada</option>
                         {Array.from({ length: editCinemaCols - 1 }).map((_, i) => (
-                          <option key={i} value={i + 1}>Setelah Kolom {i + 1}</option>
+                          <option key={i} value={i + 1}>Sel. Kolom {i + 1}</option>
                         ))}
                       </select>
                     </div>
 
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1 flex items-center gap-1">
                         <span>🚧 Sekat Jalan 2</span>
-                        <span className="text-[9px] text-slate-400 font-normal lowercase">(0 = Tidak ada)</span>
+                        <span className="text-[9px] text-slate-400 font-normal lowercase">(0 = Tidak)</span>
                       </label>
                       <select
                         value={editAisleAfterCol2}
                         onChange={(e) => setEditAisleAfterCol2(Number(e.target.value))}
-                        className="w-full bg-white border border-slate-200 py-2.5 px-3 text-xs rounded-lg outline-none focus:border-blue-900"
+                        className="w-full bg-white border border-slate-200 py-2.5 px-2 text-xs rounded-lg outline-none focus:border-blue-900"
                       >
-                        <option value={0}>Tidak Ada Jalan</option>
+                        <option value={0}>Tidak Ada</option>
                         {Array.from({ length: editCinemaCols - 1 }).map((_, i) => (
-                          <option key={i} value={i + 1}>Setelah Kolom {i + 1}</option>
+                          <option key={i} value={i + 1}>Sel. Kolom {i + 1}</option>
                         ))}
                       </select>
                     </div>
 
-                    <div className="md:col-span-3">
+                    <div className="md:col-span-2">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase mb-1">
-                        📏 Ketebalan Lebar Jalan
+                        📏 Lebar Jalan
                       </label>
                       <select
                         value={editAisleWidth}
                         onChange={(e) => setEditAisleWidth(Number(e.target.value))}
-                        className="w-full bg-white border border-slate-200 py-2.5 px-3 text-xs rounded-lg outline-none focus:border-blue-900"
+                        className="w-full bg-white border border-slate-200 py-2.5 px-2 text-xs rounded-lg outline-none focus:border-blue-900"
                       >
-                        <option value={1}>1 Baris (Standar)</option>
-                        <option value={2}>2 Baris (Ganda)</option>
+                        <option value={1}>1 Kolom</option>
+                        <option value={2}>2 Kolom</option>
                       </select>
                     </div>
 
@@ -1125,7 +1141,19 @@ export default function AdminPanel({
                         className="w-full py-2.5 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold cursor-pointer active:scale-[0.98] transition-all flex items-center justify-center gap-1.5 shadow-sm"
                       >
                         <Check className="w-4 h-4" />
-                        <span>Simpan Aturan Cinema</span>
+                        <span>Simpan Aturan</span>
+                      </button>
+                    </div>
+
+                    <div className="md:col-span-3">
+                      <button
+                        type="button"
+                        onClick={() => handleDeleteCinema(selectedCinemaId)}
+                        disabled={!selectedCinemaId}
+                        className="w-full py-2.5 bg-red-50 hover:bg-red-100 text-red-650 border border-red-150 rounded-lg text-xs font-bold cursor-pointer transition-all active:scale-[0.98] flex items-center justify-center gap-1.5 disabled:opacity-40"
+                      >
+                        <Trash2 className="w-4 h-4" />
+                        <span>Hapus Studio</span>
                       </button>
                     </div>
                   </div>
@@ -1317,7 +1345,7 @@ export default function AdminPanel({
                   </div>
 
                   <div className="grid grid-cols-1 md:grid-cols-12 gap-4">
-                    <div className="md:col-span-4">
+                    <div className="md:col-span-3">
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Sutradara/Director</label>
                       <input
                         type="text"
@@ -1329,7 +1357,37 @@ export default function AdminPanel({
                       />
                     </div>
 
-                    <div className="md:col-span-8">
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] font-bold text-amber-600 uppercase mb-1 flex items-center gap-1">
+                        <span>🏷 Promo Diskon</span>
+                        <span className="text-[9px] text-slate-400 font-normal">%</span>
+                      </label>
+                      <input
+                        type="number"
+                        min={0}
+                        max={90}
+                        value={newDiscountPercent || ''}
+                        onChange={(e) => setNewDiscountPercent(e.target.value ? Math.min(90, Math.max(0, Number(e.target.value))) : 0)}
+                        className="w-full bg-white border border-slate-200 py-2.5 px-3 text-xs rounded-lg font-bold font-mono outline-none focus:border-blue-900"
+                        placeholder="0 (Tanpa Promo)"
+                      />
+                    </div>
+
+                    <div className="md:col-span-2">
+                      <label className="block text-[10px] font-bold text-emerald-600 uppercase mb-1 flex items-center gap-1">
+                        <span>🎟 Promo B1G1</span>
+                      </label>
+                      <select
+                        value={newIsB1G1 ? 'true' : 'false'}
+                        onChange={(e) => setNewIsB1G1(e.target.value === 'true')}
+                        className="w-full bg-white border border-slate-200 py-2.5 px-2 text-xs rounded-lg font-bold outline-none focus:border-blue-900"
+                      >
+                        <option value="false">Nonaktif</option>
+                        <option value="true">Aktif (B1G1)</option>
+                      </select>
+                    </div>
+
+                    <div className="md:col-span-5">
                       <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">Sinopsis Ringkas</label>
                       <textarea
                         value={newSynopsis}
@@ -1363,12 +1421,63 @@ export default function AdminPanel({
                           referrerPolicy="no-referrer"
                         />
                         <div className="flex-grow min-w-0">
-                          <span className="text-[9px] bg-blue-50 text-blue-900 font-bold px-2 py-0.5 rounded-full inline-block mb-1.5">
-                            {m.genre}
-                          </span>
+                          <div className="flex flex-wrap gap-1.5 items-center mb-1.5">
+                            <span className="text-[9px] bg-blue-50 text-blue-900 font-bold px-2 py-0.5 rounded-full inline-block">
+                              {m.genre}
+                            </span>
+                            {m.discountPercent ? (
+                              <span className="text-[9px] bg-amber-500 text-white font-bold px-1.5 py-0.5 rounded-full inline-block animate-pulse">
+                                PROMO -{m.discountPercent}% OFF
+                              </span>
+                            ) : null}
+                            {m.isB1G1 ? (
+                              <span className="text-[9px] bg-emerald-600 text-white font-bold px-1.5 py-0.5 rounded-full inline-block">
+                                BUY 1 GET 1
+                              </span>
+                            ) : null}
+                          </div>
                           <h4 className="font-display font-semibold text-xs text-slate-800 truncate" title={m.title}>{m.title}</h4>
                           <p className="text-[10px] text-slate-500 font-medium mt-0.5">Sutradara: {m.director}</p>
                           <p className="text-[10px] text-slate-400 line-clamp-2 mt-1">{m.synopsis}</p>
+                          
+                          {/* Live Movie Promo Controller */}
+                          <div className="mt-2.5 pt-2 border-t border-slate-100 flex flex-col gap-2">
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[9.5px] font-bold text-amber-600 uppercase tracking-wide">Set Promo Diskon:</span>
+                              <div className="relative w-20">
+                                <input
+                                  type="number"
+                                  min={0}
+                                  max={90}
+                                  placeholder="0"
+                                  value={m.discountPercent || ''}
+                                  onChange={(e) => {
+                                    const val = e.target.value ? Math.min(90, Math.max(0, Number(e.target.value))) : 0;
+                                    setMovies(prev => prev.map(movie => movie.id === m.id ? { ...movie, discountPercent: val } : movie));
+                                    triggerFeedback('success', `Berhasil mengubah promo diskon film "${m.title}" menjadi ${val}%!`);
+                                  }}
+                                  className="w-full bg-slate-50 border border-slate-200 py-0.5 px-1.5 pr-5 text-center font-mono font-bold text-[10px] rounded-md outline-none focus:border-blue-900 focus:bg-white transition-all"
+                                />
+                                <span className="absolute right-1 top-0.5 font-bold text-slate-400 font-mono text-[9px]">%</span>
+                              </div>
+                            </div>
+
+                            <div className="flex items-center justify-between gap-3">
+                              <span className="text-[9.5px] font-bold text-emerald-600 uppercase tracking-wide">Promo Buy 1 Get 1 (B1G1):</span>
+                              <select
+                                value={m.isB1G1 ? 'true' : 'false'}
+                                onChange={(e) => {
+                                  const val = e.target.value === 'true';
+                                  setMovies(prev => prev.map(movie => movie.id === m.id ? { ...movie, isB1G1: val } : movie));
+                                  triggerFeedback('success', `Berhasil mengubah status B1G1 film "${m.title}" menjadi ${val ? 'Aktif' : 'Nonaktif'}!`);
+                                }}
+                                className="bg-slate-50 border border-slate-200 py-0.5 px-1.5 text-center font-bold text-[10px] rounded-md outline-none focus:border-blue-900 focus:bg-white transition-all text-slate-700"
+                              >
+                                <option value="false">Nonaktif</option>
+                                <option value="true">Aktif</option>
+                              </select>
+                            </div>
+                          </div>
                         </div>
                         <button
                           onClick={() => handleDeleteMovie(m.id)}
@@ -1684,6 +1793,11 @@ export default function AdminPanel({
               const grossProfit = totalRevenueTickets - calculatedRoyaltyFee;
               const netProfit = totalRevenueTickets - calculatedTaxFee - calculatedRoyaltyFee - calculatedOpexFee;
 
+              const totalMovieDiscounts = bookings.reduce((sum, b) => sum + (b.movieDiscountAmount || 0), 0);
+              const totalB1G1Discounts = bookings.reduce((sum, b) => sum + (b.b1g1DiscountAmount || 0), 0);
+              const totalVoucherDiscounts = bookings.reduce((sum, b) => sum + (b.voucherDiscountAmount || 0), 0);
+              const totalInitialGrossRevenue = totalRevenueTickets + totalMovieDiscounts + totalB1G1Discounts + totalVoucherDiscounts;
+
               // Daily Financial Exporters (CSV, Excel, PDF)
               const handleDownloadDailyFinancialCsv = (targetDate: string) => {
                 const dayBookings = bookings.filter(b => b.bookingDate.startsWith(targetDate));
@@ -1717,13 +1831,19 @@ export default function AdminPanel({
                 csvRows.push(['Laba Bersih Akhir Harian', `Rp ${dayNetOfTaxRoyaltyOpex.toLocaleString('id-ID')}`]);
                 csvRows.push([]);
                 csvRows.push(['DAFTAR RECURRING RESERVASI TIKET']);
-                csvRows.push(['ID Pemesanan', 'Waktu Transaksi', 'Judul Film', 'Cinema', 'Nama Pembeli', 'Kursi Dipesan', 'Harga Tiket (Paid)', 'Pajak Hari ini', 'Royalti Hari ini', 'Operasional Hari ini', 'Laba Bersih']);
+                csvRows.push(['ID Pemesanan', 'Waktu Transaksi', 'Judul Film', 'Cinema', 'Nama Pembeli', 'Kursi Dipesan', 'Harga Kotor Awal (Gross)', 'Potongan Diskon Film', 'Potongan B1G1 Gratis', 'Kode Voucher Checkout', 'Potongan Voucher Checkout', 'Harga Bersih Terbayar (Net Paid)', 'Pajak Hari ini', 'Royalti Hari ini', 'Operasional Hari ini', 'Laba Bersih']);
 
                 dayBookings.forEach(b => {
                   const itemTax = b.pricePaid * (taxRate / 100);
                   const itemRoyalty = b.pricePaid * (royaltyRate / 100);
                   const itemOpex = b.pricePaid * (opexRate / 100);
                   const itemNet = b.pricePaid - itemTax - itemRoyalty - itemOpex;
+
+                  const movieDiscount = b.movieDiscountAmount || 0;
+                  const b1g1Discount = b.b1g1DiscountAmount || 0;
+                  const voucherDiscount = b.voucherDiscountAmount || 0;
+                  const originalCost = b.pricePaid + movieDiscount + b1g1Discount + voucherDiscount;
+                  const voucherCode = b.voucherCodeUsed || '-';
 
                   csvRows.push([
                     b.id,
@@ -1732,6 +1852,11 @@ export default function AdminPanel({
                     b.cinemaName,
                     b.userName,
                     b.seats.join('; '),
+                    originalCost,
+                    movieDiscount,
+                    b1g1Discount,
+                    voucherCode,
+                    voucherDiscount,
                     b.pricePaid,
                     itemTax,
                     itemRoyalty,
@@ -1786,7 +1911,7 @@ export default function AdminPanel({
                   ['Laba Bersih Akhir Harian', `Rp ${dayNet.toLocaleString('id-ID')}`],
                   [],
                   ['DAFTAR RECURRING RESERVASI TIKET'],
-                  ['ID Pemesanan', 'Waktu Transaksi', 'Judul Film', 'Cinema', 'Nama Pembeli', 'Kursi Dipesan', 'Harga Tiket (Paid)', 'Pajak Hari ini', 'Royalti Hari ini', 'Operasional Hari ini', 'Laba Bersih']
+                  ['ID Pemesanan', 'Waktu Transaksi', 'Judul Film', 'Cinema', 'Nama Pembeli', 'Kursi Dipesan', 'Harga Kotor Awal (Gross)', 'Potongan Diskon Film', 'Potongan B1G1 Gratis', 'Kode Voucher Checkout', 'Potongan Voucher Checkout', 'Harga Bersih Terbayar (Net Paid)', 'Pajak Hari ini', 'Royalti Hari ini', 'Operasional Hari ini', 'Laba Bersih']
                 ];
 
                 dayBookings.forEach(b => {
@@ -1795,6 +1920,12 @@ export default function AdminPanel({
                   const itemOpex = b.pricePaid * (opexRate / 100);
                   const itemNet = b.pricePaid - itemTax - itemRoyalty - itemOpex;
 
+                  const movieDiscount = b.movieDiscountAmount || 0;
+                  const b1g1Discount = b.b1g1DiscountAmount || 0;
+                  const voucherDiscount = b.voucherDiscountAmount || 0;
+                  const originalCost = b.pricePaid + movieDiscount + b1g1Discount + voucherDiscount;
+                  const voucherCode = b.voucherCodeUsed || '-';
+
                   rows.push([
                     b.id,
                     b.bookingDate.replace('T', ' '),
@@ -1802,6 +1933,11 @@ export default function AdminPanel({
                     b.cinemaName,
                     b.userName,
                     b.seats.join(', '),
+                    `Rp ${originalCost.toLocaleString('id-ID')}`,
+                    `Rp ${movieDiscount.toLocaleString('id-ID')}`,
+                    `Rp ${b1g1Discount.toLocaleString('id-ID')}`,
+                    voucherCode,
+                    `Rp ${voucherDiscount.toLocaleString('id-ID')}`,
                     `Rp ${b.pricePaid.toLocaleString('id-ID')}`,
                     `Rp ${itemTax.toLocaleString('id-ID')}`,
                     `Rp ${itemRoyalty.toLocaleString('id-ID')}`,
@@ -1865,47 +2001,62 @@ export default function AdminPanel({
                     </div>
                   </div>
 
-                  <h3 style="margin-top:30px; border-bottom:1px solid #e2e8f0; padding-bottom:8px; font-size:13px; color:#1e293b;">Daftar Detail Transaksi Reservasi Tiket</h3>
-                  <table>
-                    <thead>
-                      <tr>
-                        <th>ID Pemesanan</th>
-                        <th>Waktu</th>
-                        <th>Film</th>
-                        <th>Cinema</th>
-                        <th>Nama Pembeli</th>
-                        <th>Kursi</th>
-                        <th class="text-right">Kotor (Gross)</th>
-                        <th class="text-right">Pajak (${taxRate}%)</th>
-                        <th class="text-right">Royalti (${royaltyRate}%)</th>
-                        <th class="text-right">Opex (${opexRate}%)</th>
-                        <th class="text-right">Bersih (Net)</th>
-                      </tr>
-                    </thead>
-                    <tbody>
-                      ${dayBookings.map(b => {
-                        const itemTax = b.pricePaid * (taxRate / 100);
-                        const itemRoyalty = b.pricePaid * (royaltyRate / 100);
-                        const itemOpex = b.pricePaid * (opexRate / 100);
-                        const itemNet = b.pricePaid - itemTax - itemRoyalty - itemOpex;
-                        return `
-                          <tr>
-                            <td class="font-mono">${b.id}</td>
-                            <td>${b.bookingDate.split('T')[1]?.substring(0, 5) || b.bookingDate}</td>
-                            <td><strong>${b.movieTitle}</strong></td>
-                            <td>${b.cinemaName}</td>
-                            <td>${b.userName}</td>
-                            <td class="font-mono">${b.seats.join(', ')}</td>
-                            <td class="text-right font-mono">Rp ${b.pricePaid.toLocaleString('id-ID')}</td>
-                            <td class="text-right font-mono" style="color: #b91c1c;">Rp ${itemTax.toLocaleString('id-ID')}</td>
-                            <td class="text-right font-mono" style="color: #b91c1c;">Rp ${itemRoyalty.toLocaleString('id-ID')}</td>
-                            <td class="text-right font-mono" style="color: #b91c1c;">Rp ${itemOpex.toLocaleString('id-ID')}</td>
-                            <td class="text-right font-mono" style="color: #15803d; font-weight: bold;">Rp ${itemNet.toLocaleString('id-ID')}</td>
-                          </tr>
-                        `;
-                      }).join('')}
-                    </tbody>
-                  </table>
+                   <h3 style="margin-top:30px; border-bottom:1px solid #e2e8f0; padding-bottom:8px; font-size:13px; color:#1e293b;">Daftar Detail Transaksi Reservasi & Potongan Promo</h3>
+                   <table>
+                     <thead>
+                       <tr>
+                         <th>ID Pemesanan</th>
+                         <th>Waktu</th>
+                         <th>Film & Cinema</th>
+                         <th>Nama Pembeli</th>
+                         <th class="text-right">Harga Kotor</th>
+                         <th class="text-right">Diskon Film</th>
+                         <th class="text-right">B1G1 Gratis</th>
+                         <th class="text-right">Voucher</th>
+                         <th class="text-right" style="background-color:#f1f5f9;">Terbayar Bersih</th>
+                         <th class="text-right">Pajak (${taxRate}%)</th>
+                         <th class="text-right">Royalti (${royaltyRate}%)</th>
+                         <th class="text-right">Bersih (Net)</th>
+                       </tr>
+                     </thead>
+                     <tbody>
+                       ${dayBookings.map(b => {
+                         const itemTax = b.pricePaid * (taxRate / 100);
+                         const itemRoyalty = b.pricePaid * (royaltyRate / 100);
+                         const itemOpex = b.pricePaid * (opexRate / 100);
+                         const itemNet = b.pricePaid - itemTax - itemRoyalty - itemOpex;
+
+                         const movieDiscount = b.movieDiscountAmount || 0;
+                         const b1g1Discount = b.b1g1DiscountAmount || 0;
+                         const voucherDiscount = b.voucherDiscountAmount || 0;
+                         const originalCost = b.pricePaid + movieDiscount + b1g1Discount + voucherDiscount;
+                         const voucherCodeLabel = b.voucherCodeUsed ? `<span style="font-size:8px;color:#4f46e5;display:block;">[Code: ${b.voucherCodeUsed}]</span>` : '';
+
+                         return `
+                           <tr>
+                             <td class="font-mono" style="font-size:10px;">${b.id}</td>
+                             <td style="font-size:10px;">${b.bookingDate.split('T')[1]?.substring(0, 5) || b.bookingDate}</td>
+                             <td>
+                               <strong style="font-size:11px;">${b.movieTitle}</strong>
+                               <div style="font-size:9px; color:#64748b;">${b.cinemaName} (Kursi: ${b.seats.join(', ')})</div>
+                             </td>
+                             <td style="font-size:11.5px;">${b.userName}</td>
+                             <td class="text-right font-mono" style="color:#64748b;">Rp ${originalCost.toLocaleString('id-ID')}</td>
+                             <td class="text-right font-mono" style="color:#dc2626;">-Rp ${movieDiscount.toLocaleString('id-ID')}</td>
+                             <td class="text-right font-mono" style="color:#16a34a;">-Rp ${b1g1Discount.toLocaleString('id-ID')}</td>
+                             <td class="text-right font-mono" style="color:#4f46e5;">
+                               -Rp ${voucherDiscount.toLocaleString('id-ID')}
+                               ${voucherCodeLabel}
+                             </td>
+                             <td class="text-right font-mono font-bold" style="background-color:#f8fafc; color:#0f172a;">Rp ${b.pricePaid.toLocaleString('id-ID')}</td>
+                             <td class="text-right font-mono" style="color:#b91c1c;">Rp ${itemTax.toLocaleString('id-ID')}</td>
+                             <td class="text-right font-mono" style="color:#b91c1c;">Rp ${itemRoyalty.toLocaleString('id-ID')}</td>
+                             <td class="text-right font-mono" style="color:#15803d; font-weight: bold;">Rp ${itemNet.toLocaleString('id-ID')}</td>
+                           </tr>
+                         `;
+                       }).join('')}
+                     </tbody>
+                   </table>
 
                   <div class="footer">
                     Laporan dicetak otomatis oleh ${branding.appName || 'Bioskop ERP'} pada ${new Date().toLocaleString('id-ID')} WIB
@@ -1930,7 +2081,11 @@ export default function AdminPanel({
                 csvRows.push(['Parameter Operasional (%)', `${opexRate}%`]);
                 csvRows.push([]);
                 csvRows.push(['AKUMULASI POS LAPORAN LABA RUGI']);
-                csvRows.push(['Total Pendapatan Tiket (Gross)', totalRevenueTickets]);
+                csvRows.push(['Total Nilai Penjualan Kotor (Face Value Tiket)', totalInitialGrossRevenue]);
+                csvRows.push(['Total Potongan Diskon Film', totalMovieDiscounts]);
+                csvRows.push(['Total Potongan Voucher Checkout', totalVoucherDiscounts]);
+                csvRows.push(['Total Potongan Subsidi B1G1', totalB1G1Discounts]);
+                csvRows.push(['Total Hasil Penjualan Bersih Realisasi (Paid)', totalRevenueTickets]);
                 csvRows.push(['Total Potongan PPN', calculatedTaxFee]);
                 csvRows.push(['Total Royalti Distributor', calculatedRoyaltyFee]);
                 csvRows.push(['Total Operasional Staf/Studio', calculatedOpexFee]);
@@ -1986,7 +2141,11 @@ export default function AdminPanel({
                   ['Parameter Operasional (%)', `${opexRate}%`],
                   [],
                   ['AKUMULASI POS LAPORAN LABA RUGI'],
-                  ['Total Pendapatan Tiket (Gross)', `Rp ${totalRevenueTickets.toLocaleString('id-ID')}`],
+                  ['Total Nilai Penjualan Kotor (Face Value Tiket)', `Rp ${totalInitialGrossRevenue.toLocaleString('id-ID')}`],
+                  ['Total Potongan Diskon Film', `Rp ${totalMovieDiscounts.toLocaleString('id-ID')}`],
+                  ['Total Potongan Voucher Checkout', `Rp ${totalVoucherDiscounts.toLocaleString('id-ID')}`],
+                  ['Total Potongan Subsidi B1G1', `Rp ${totalB1G1Discounts.toLocaleString('id-ID')}`],
+                  ['Total Hasil Penjualan Bersih Realisasi (Paid)', `Rp ${totalRevenueTickets.toLocaleString('id-ID')}`],
                   ['Total Potongan PPN', `Rp ${calculatedTaxFee.toLocaleString('id-ID')}`],
                   ['Total Royalti Distributor', `Rp ${calculatedRoyaltyFee.toLocaleString('id-ID')}`],
                   ['Total Operasional Staf/Studio', `Rp ${calculatedOpexFee.toLocaleString('id-ID')}`],
@@ -2046,35 +2205,55 @@ export default function AdminPanel({
 
                   <div class="grid">
                     <div class="card">
-                      <div class="card-title">Akumulasi Omzet Loket (Kotor)</div>
+                      <div class="card-title">Maksima Nilai Kotor (Face Value)</div>
+                      <div class="card-val" style="color: #64748b;">Rp ${totalInitialGrossRevenue.toLocaleString('id-ID')}</div>
+                      <div class="card-desc">Total diskon film, voucher & B1G1 diberikan: Rp ${(totalMovieDiscounts + totalVoucherDiscounts + totalB1G1Discounts).toLocaleString('id-ID')}</div>
+                    </div>
+                    <div class="card">
+                      <div class="card-title">Omzet Realisasi Bersih Terbayar</div>
                       <div class="card-val" style="color: #2563eb;">Rp ${totalRevenueTickets.toLocaleString('id-ID')}</div>
                       <div class="card-desc">Total penonton terekam ${bookings.length} orang</div>
                     </div>
                     <div class="card">
-                      <div class="card-title">Bagi Hasil Royalti Konten (${royaltyRate}%)</div>
-                      <div class="card-val" style="color: #ea580c;">Rp ${calculatedRoyaltyFee.toLocaleString('id-ID')}</div>
-                      <div class="card-desc">Beban wajib distributor film</div>
-                    </div>
-                    <div class="card">
-                      <div class="card-title">Laba Rugi Neto Terkonsolidasi</div>
+                      <div class="card-title font-bold">Laba Rugi Neto Konsolidasi</div>
                       <div style="color: ${netProfit >= 0 ? '#16a34a' : '#dc2626'};" class="card-val">Rp ${netProfit.toLocaleString('id-ID')}</div>
-                      <div class="card-desc">Laba bersih final setelah potongan PPN & Opex</div>
+                      <div class="card-desc">Kotor realisasi dikurangi pajak, royalti & opex</div>
                     </div>
                   </div>
 
-                  <h3 style="margin-top:30px; border-bottom:1px solid #e2e8f0; padding-bottom:8px; font-size:13px; color:#1e293b;">Rincian Beban & Alokasi Pengurangan Ledger</h3>
+                  <h3 style="margin-top:30px; border-bottom:1px solid #e2e8f0; padding-bottom:8px; font-size:13px; color:#1e293b;">Rincian Beban, Diskon & Alokasi Pengurangan Ledger</h3>
                   <table>
                     <thead>
                       <tr>
-                        <th>Akun Ledger Pos Pengeluaran</th>
-                        <th class="text-right">Skema Kontrak</th>
-                        <th class="text-right">Total Potongan Debit (IDR)</th>
+                        <th>Akun Ledger Pos Pengeluaran / Potongan</th>
+                        <th class="text-right">Skema Kontrak / Jenis Promo</th>
+                        <th class="text-right">Total Debit (IDR)</th>
                       </tr>
                     </thead>
                     <tbody>
                       <tr>
+                        <td><strong>Subsidi Diskon Film Umum</strong></td>
+                        <td class="text-right">Potongan Harga Tiket Terpilih</td>
+                        <td class="text-right font-mono" style="color: #ea5800;">-Rp ${totalMovieDiscounts.toLocaleString('id-ID')}</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Potongan Penjualan Kupon Voucher</strong></td>
+                        <td class="text-right">Klaim Kode Promo (Checkout)</td>
+                        <td class="text-right font-mono" style="color: #4f46e5;">-Rp ${totalVoucherDiscounts.toLocaleString('id-ID')}</td>
+                      </tr>
+                      <tr>
+                        <td><strong>Subsidi Program Beli 1 Gratis 1 (B1G1)</strong></td>
+                        <td class="text-right">Promosi Khusus Tiket Gratis</td>
+                        <td class="text-right font-mono" style="color: #10b981;">-Rp ${totalB1G1Discounts.toLocaleString('id-ID')}</td>
+                      </tr>
+                      <tr style="background-color: #f8fafc; font-weight: bold;">
+                        <td>Total Potongan Promosi Penjualan</td>
+                        <td class="text-right">Dipotong dari Nilai Face Value</td>
+                        <td class="text-right font-mono" style="color: #dc2626;">-Rp ${(totalMovieDiscounts + totalVoucherDiscounts + totalB1G1Discounts).toLocaleString('id-ID')}</td>
+                      </tr>
+                      <tr>
                         <td><strong>Beban Pajak Daerah PB1 / Penjualan Tiket (PPN)</strong></td>
-                        <td class="text-right">${taxRate}% (pembagian reguler)</td>
+                        <td class="text-right">${taxRate}% (dari Omzet Realisasi)</td>
                         <td class="text-right font-mono" style="color: #b91c1c;">-Rp ${calculatedTaxFee.toLocaleString('id-ID')}</td>
                       </tr>
                       <tr>
@@ -2087,8 +2266,8 @@ export default function AdminPanel({
                         <td class="text-right">${opexRate}% (listrik, karyawan, audio)</td>
                         <td class="text-right font-mono" style="color: #b91c1c;">-Rp ${calculatedOpexFee.toLocaleString('id-ID')}</td>
                       </tr>
-                      <tr style="background-color: #f8fafc; font-weight: bold;">
-                        <td>Total Beban Pengurangan Pendapatan Kotor</td>
+                      <tr style="background-color: #f1f5f9; font-weight: bold;">
+                        <td>Total Beban Pengurangan Operasional & Pajak</td>
                         <td class="text-right">Apropriasi Berkelanjutan</td>
                         <td class="text-right font-mono" style="color: #b91c1c;">-Rp ${(calculatedTaxFee + calculatedRoyaltyFee + calculatedOpexFee).toLocaleString('id-ID')}</td>
                       </tr>
@@ -2654,9 +2833,25 @@ export default function AdminPanel({
                           <span>PENDAPATAN UTAMA OPERASIONAL</span>
                           <span>KREDIT (IDR)</span>
                         </div>
-                        <div className="flex justify-between pl-3 text-slate-600">
-                          <span>Penjualan Tiket Film Realisasi (Bookings)</span>
-                          <span className="font-mono text-teal-650 font-bold">+Rp {totalRevenueTickets.toLocaleString('id-ID')}</span>
+                        <div className="flex justify-between pl-3 text-slate-500">
+                          <span>Nilai Penjualan Kotor (Face Value Tiket)</span>
+                          <span className="font-mono font-medium">+Rp {totalInitialGrossRevenue.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between pl-5 text-red-500">
+                          <span>↳ Potongan Diskon Film</span>
+                          <span className="font-mono">-Rp {totalMovieDiscounts.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between pl-5 text-indigo-500">
+                          <span>↳ Potongan Voucher Checkout</span>
+                          <span className="font-mono">-Rp {totalVoucherDiscounts.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between pl-5 text-emerald-600">
+                          <span>↳ Subsidi Beli 1 Gratis 1 (B1G1)</span>
+                          <span className="font-mono">-Rp {totalB1G1Discounts.toLocaleString('id-ID')}</span>
+                        </div>
+                        <div className="flex justify-between pl-3 bg-slate-50 py-1.5 px-2 rounded-lg font-bold text-slate-800 border border-slate-150">
+                          <span>Hasil Penjualan Bersih Realisasi (Paid)</span>
+                          <span className="font-mono text-teal-650">+Rp {totalRevenueTickets.toLocaleString('id-ID')}</span>
                         </div>
 
                         {/* HPP & BIAYA COGS SECTION */}
@@ -2935,10 +3130,41 @@ export default function AdminPanel({
                       <h3 className="font-display font-extrabold text-sm text-slate-800 mt-0.5">Buat Voucher Kasir Massal</h3>
                     </div>
 
+                    {/* Voucher Type selection */}
+                    <div className="space-y-1.5">
+                      <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
+                        Tipe Voucher / Kupon
+                      </label>
+                      <div className="flex bg-slate-100 p-1 rounded-xl border border-slate-200 text-xs">
+                        <button
+                          type="button"
+                          onClick={() => setNewVoucherType('topup')}
+                          className={`flex-1 py-1 px-2.5 rounded-lg font-bold text-center transition-all cursor-pointer ${
+                            newVoucherType === 'topup'
+                              ? 'bg-white shadow-sm text-blue-900'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Top-up Dompet
+                        </button>
+                        <button
+                          type="button"
+                          onClick={() => setNewVoucherType('discount')}
+                          className={`flex-1 py-1 px-2.5 rounded-lg font-bold text-center transition-all cursor-pointer ${
+                            newVoucherType === 'discount'
+                              ? 'bg-white shadow-sm text-blue-900'
+                              : 'text-slate-500 hover:text-slate-800'
+                          }`}
+                        >
+                          Kupon Diskon Checkout
+                        </button>
+                      </div>
+                    </div>
+
                     {/* Presets Amount */}
                     <div className="space-y-2">
                       <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider">
-                        Pilih Denominasi Saldo (Nominal)
+                        {newVoucherType === 'topup' ? 'Pilih Denominasi Saldo (Nominal)' : 'Pilih Potongan Diskon Khas (Rp, jika persen = 0)'}
                       </label>
                       <div className="grid grid-cols-3 gap-2">
                         {[10000, 25000, 50000, 100000, 150000, 250000].map(amountPreset => (
@@ -2964,7 +3190,7 @@ export default function AdminPanel({
                     {/* Custom Input */}
                     <div>
                       <label className="block text-[10px] font-bold text-slate-500 uppercase tracking-wider mb-1.5">
-                        Atau Masukkan Nominal Kustom (Rp)
+                        {newVoucherType === 'topup' ? 'Atau Masukkan Nominal Kustom (Rp)' : 'Atau Potongan Diskon Nominal (Rp, jika persen = 0)'}
                       </label>
                       <div className="relative">
                         <span className="absolute left-3 top-2.5 text-xs text-slate-400 font-bold">Rp</span>
@@ -2977,9 +3203,48 @@ export default function AdminPanel({
                         />
                       </div>
                       <p className="text-[9px] text-slate-400 mt-1">
-                        Saran: kustomisasi jika ada promo nominal ganjil.
+                        {newVoucherType === 'topup' 
+                          ? 'Saran: kustomisasi jika ada promo nominal ganjil.'
+                          : 'Jika Anda mengisi persentase diskon (%) di bawah, nominal Rp ini diabaikan.'
+                        }
                       </p>
                     </div>
+
+                    {/* Discount-specific Form configs */}
+                    {newVoucherType === 'discount' && (
+                      <div className="p-3 bg-amber-500/10 border border-amber-200/50 rounded-xl space-y-3">
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1.5">
+                            Persentase Diskon (%) (Opsional)
+                          </label>
+                          <input
+                            type="number"
+                            min={0}
+                            max={100}
+                            placeholder="Contoh: 15 (Ketik 0 jika ingin diskon kupon nominal Rp di atas)"
+                            value={newVoucherDiscountPercent || ''}
+                            onChange={(e) => setNewVoucherDiscountPercent(Number(e.target.value))}
+                            className="w-full bg-white border border-slate-200 py-2 px-3 text-xs font-bold rounded-lg outline-none focus:border-blue-900 font-mono text-slate-800"
+                          />
+                        </div>
+
+                        <div>
+                          <label className="block text-[10px] font-bold text-amber-900 uppercase tracking-wider mb-1.5">
+                            Batasi Hanya Berlaku Untuk Film Tertentu (Opsional)
+                          </label>
+                          <select
+                            value={newVoucherTargetMovieId}
+                            onChange={(e) => setNewVoucherTargetMovieId(e.target.value)}
+                            className="w-full bg-white border border-slate-200 py-2 px-3 text-xs rounded-lg outline-none focus:border-blue-900 text-slate-800 font-medium"
+                          >
+                            <option value="">Berlaku untuk Semua Judul Film</option>
+                            {movies.map(m => (
+                              <option key={m.id} value={m.id}>{m.title}</option>
+                            ))}
+                          </select>
+                        </div>
+                      </div>
+                    )}
 
                     {/* Batch Quantity */}
                     <div>
@@ -3101,10 +3366,29 @@ export default function AdminPanel({
                                     {isCopied ? '✓ Tersalin!' : '📋 Salin'}
                                   </button>
                                 </div>
-                                <div className="flex items-center gap-2 text-[10px] text-slate-500">
+                                <div className="flex flex-wrap items-center gap-2 text-[10px] text-slate-500">
                                   <span>Dibuat: {new Date(v.createdAt).toLocaleDateString('id-ID', { hour: '2-digit', minute: '2-digit' })}</span>
                                   <span>•</span>
-                                  <span className="font-bold text-emerald-800">Rp {v.amount.toLocaleString('id-ID')}</span>
+                                  <span className={`px-1.5 py-0.5 rounded text-[9px] font-bold ${
+                                    v.type === 'discount' ? 'bg-amber-100 text-amber-800' : 'bg-blue-100 text-blue-800'
+                                  }`}>
+                                    {v.type === 'discount' ? 'DISCOUNT PROMO' : 'TOP-UP SALDO'}
+                                  </span>
+                                  <span>•</span>
+                                  <span className="font-bold text-slate-700">
+                                    {v.type === 'discount' 
+                                      ? (v.discountPercent ? `Diskon ${v.discountPercent}%` : `Potongan Rp ${v.amount.toLocaleString('id-ID')}`)
+                                      : `Dana Rp ${v.amount.toLocaleString('id-ID')}`
+                                    }
+                                  </span>
+                                  {v.targetMovieId && (
+                                    <>
+                                      <span>•</span>
+                                      <span className="text-pink-600 font-semibold" title="Batas film">
+                                        Film: {movies.find(m => m.id === v.targetMovieId)?.title || 'Khusus'}
+                                      </span>
+                                    </>
+                                  )}
                                 </div>
                               </div>
 
@@ -3263,16 +3547,32 @@ export default function AdminPanel({
                           className="w-full bg-white border border-slate-200 focus:border-blue-900 py-2.5 px-3.5 text-xs rounded-lg outline-none font-sans"
                         />
                       </div>
+
+                      <div>
+                        <label className="block text-[10px] font-bold text-slate-400 uppercase mb-1">
+                          Saldo Awal Registrasi Akun Baru (Rp)
+                        </label>
+                        <input
+                          type="number"
+                          value={branding.defaultBuyerBalance !== undefined ? branding.defaultBuyerBalance : 100000}
+                          onChange={(e) => setBranding(prev => ({ ...prev, defaultBuyerBalance: Number(e.target.value) }))}
+                          placeholder="Nominal default, e.g. 100000"
+                          className="w-full bg-white border border-slate-200 focus:border-blue-900 py-2.5 px-3.5 text-xs font-bold rounded-lg outline-none font-mono"
+                        />
+                        <p className="text-[9px] text-slate-400 mt-1">
+                          Nominal saldo cuma-cuma yang langsung diberikan ketika pembeli mendaftarkan akun baru.
+                        </p>
+                      </div>
                     </div>
 
                     <div className="pt-2">
-                      <button
+                       <button
                         type="button"
-                        onClick={() => triggerFeedback('success', 'Konfigurasi identitas branding aplikasi berhasil dideploy ke local storage secara global!')}
+                        onClick={() => triggerFeedback('success', 'Konfigurasi aplikasi berhasil disimpan di cloud database secara global!')}
                         className="w-full py-2 bg-blue-600 hover:bg-blue-700 text-white rounded-lg text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm"
                       >
                         <Check className="w-4 h-4" />
-                        <span>Simpan Perubahan Logo & Nama</span>
+                        <span>Simpan Konfigurasi Aplikasi</span>
                       </button>
                     </div>
                   </div>

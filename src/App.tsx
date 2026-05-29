@@ -418,22 +418,7 @@ export default function App() {
         />
       )}
 
-      {/* Floating PWA & Remote System Connection Badge */}
-      <div className="fixed bottom-4 right-4 z-40 max-w-sm bg-white/95 backdrop-blur border border-slate-150 rounded-2xl p-3.5 shadow-xl hidden md:flex gap-3 items-start animate-fade-in text-[11px] leading-relaxed">
-        <Wifi className="w-5 h-5 text-emerald-600 shrink-0 mt-0.5" />
-        <div>
-          <span className="font-display font-bold text-slate-800 uppercase tracking-wider block text-[10px]">
-            Aplikasi Online Terhubung (Firebase Active)
-          </span>
-          <p className="text-slate-500 mt-1">
-            Sistem database saat ini sinkron secara online menggunakan **Google Firestore**. Semua jadwal film, kursi teater, pemesanan tiket, dan saldo tersinkronisasi langsung antar perangkat.
-          </p>
-          <div className="mt-2 text-slate-400 font-mono text-[9px] flex items-center gap-1.5 font-bold uppercase">
-            <CheckCircle className="w-3.5 h-3.5 text-emerald-500" />
-            <span>CLOUD FIRESTORE DB READY • MULTI-USER SYNC</span>
-          </div>
-        </div>
-      </div>
+
 
     </div>
   );

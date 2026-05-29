@@ -15,6 +15,8 @@ export interface Movie {
   synopsis: string;
   genre: string;
   posterUrl: string;
+  discountPercent?: number; // direct general discount percentage for this movie (e.g. 15 for 15%)
+  isB1G1?: boolean; // is Buy 1 Get 1 Free promo activated for this movie
 }
 
 export interface Cinema {
@@ -33,6 +35,7 @@ export interface AppBranding {
   appName: string;
   appLogoChar: string; // single character/letter or emoji
   themeColor: string; // e.g. blue or custom
+  defaultBuyerBalance?: number; // default starting balance for newly registered users
 }
 
 export interface Schedule {
@@ -55,15 +58,23 @@ export interface Booking {
   seats: string[]; // e.g., ["B-2", "B-3"]
   pricePaid: number;
   bookingDate: string; // e.g., "2026-05-26T04:30:00"
+  movieDiscountAmount?: number; // total movie general percentage discount deducted
+  voucherDiscountAmount?: number; // total discount from checked-out voucher code
+  voucherCodeUsed?: string; // code of the voucher applied at checkout
+  isB1G1Applied?: boolean; // whether B1G1 promo was active for this booking
+  b1g1DiscountAmount?: number; // total B1G1 free ticket benefit value
 }
 
 export interface Voucher {
   id: string;
-  code: string; // e.g. "TOPUP-XXXX-XXXX"
-  amount: number; // e.g. 50000 or 100000
+  code: string; // e.g. "TOPUP-XXXX-XXXX" or "DISKON-AVENGERS"
+  amount: number; // nominal value if top-up, or flat discount value if any
   isRedeemed: boolean;
   redeemedBy?: string; // userName or userId
   redeemedAt?: string; // ISO date string
   createdAt: string; // ISO date string
+  type?: 'topup' | 'discount'; // discount voucher can be entered at checkout, topup increases buyer balance in wallet
+  discountPercent?: number; // percentage discount (e.g., 20 for 20% off)
+  targetMovieId?: string; // limit this voucher discount to a specific movie
 }
 

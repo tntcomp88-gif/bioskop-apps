@@ -62,6 +62,46 @@ export default function BuyerDashboard({
   const [voucherCodeInput, setVoucherCodeInput] = useState<string>('');
   const [redeemingVoucherError, setRedeemingVoucherError] = useState<string>('');
 
+  // Checkout Discount Code System
+  const [discountCodeInput, setDiscountCodeInput] = useState<string>('');
+  const [appliedVoucher, setAppliedVoucher] = useState<Voucher | null>(null);
+  const [couponErrorMessage, setCouponErrorMessage] = useState<string>('');
+
+  const handleApplyDiscountCode = (e: React.FormEvent) => {
+    e.preventDefault();
+    setCouponErrorMessage('');
+    if (!discountCodeInput.trim()) {
+      setCouponErrorMessage('Silakan ketik kode voucher!');
+      return;
+    }
+    const cleanCode = discountCodeInput.trim().toUpperCase();
+    const foundVch = vouchers.find(v => v.code.toUpperCase() === cleanCode);
+    if (!foundVch) {
+      setCouponErrorMessage('Kode voucher diskon tidak valid!');
+      return;
+    }
+    if (foundVch.isRedeemed) {
+      setCouponErrorMessage('Kupon diskon ini sudah terpakai!');
+      return;
+    }
+    if (foundVch.type !== 'discount' && foundVch.discountPercent === undefined) {
+      setCouponErrorMessage('Voucher ini adalah kupon Top-up, silakan gunakan menu top-up dompet di atas untuk redeem kupon saldo!');
+      return;
+    }
+    if (foundVch.targetMovieId && selectedMovie && foundVch.targetMovieId !== selectedMovie.id) {
+      const targetMovie = movies.find(m => m.id === foundVch.targetMovieId);
+      setCouponErrorMessage(`Voucher ini hanya berlaku untuk film "${targetMovie?.title || 'Film Khusus'}"!`);
+      return;
+    }
+    setAppliedVoucher(foundVch);
+    setDiscountCodeInput('');
+  };
+
+  const handleRemoveDiscountCode = () => {
+    setAppliedVoucher(null);
+    setCouponErrorMessage('');
+  };
+
   // Handle Voucher Redemption Code Submit
   const handleRedeemVoucherCode = (e: React.FormEvent) => {
     e.preventDefault();
@@ -167,6 +207,9 @@ export default function BuyerDashboard({
       }
       setSelectedSeats([]);
       setTicketQty(1);
+      setAppliedVoucher(null);
+      setDiscountCodeInput('');
+      setCouponErrorMessage('');
     }
   }, [selectedMovie, schedules]);
 
@@ -228,9 +271,28 @@ export default function BuyerDashboard({
       return;
     }
 
-    const totalCost = ticketQty * selectedScheduleObj.price;
+    // --- CALCULATE DYNAMIC COSTS WITH PROMO AND VOUCHER FORMULAS ---
+    const baseTicketPrice = selectedScheduleObj.price;
+    const movieDiscountPercent = selectedMovie.discountPercent || 0;
+    const ticketPriceAfterMovieDiscount = baseTicketPrice * (1 - movieDiscountPercent / 100);
+    
+    // Apply B1G1 logic: only pay for Math.ceil(ticketQty / 2) tickets
+    const payableQty = selectedMovie.isB1G1 ? Math.ceil(ticketQty / 2) : ticketQty;
+    const costBeforeVoucher = payableQty * ticketPriceAfterMovieDiscount;
+
+    let totalCost = costBeforeVoucher;
+    if (appliedVoucher) {
+      if (appliedVoucher.discountPercent) {
+        totalCost = costBeforeVoucher * (1 - appliedVoucher.discountPercent / 100);
+      } else if (appliedVoucher.amount) {
+        totalCost = Math.max(0, costBeforeVoucher - appliedVoucher.amount);
+      }
+    }
+
+    totalCost = Math.round(totalCost); // Avoid float decimals
+
     if (buyerBalance < totalCost) {
-      setErrorAlert(`Saldo dompet Anda tidak mencukupi. Diperlukan Rp ${totalCost.toLocaleString('id-ID')}, sedangkan saldo Anda dalah Rp ${buyerBalance.toLocaleString('id-ID')}. Silakan klik tombol "Top Up Saldo" di bagian dompet.`);
+      setErrorAlert(`Saldo dompet Anda tidak mencukupi. Diperlukan Rp ${totalCost.toLocaleString('id-ID')}, sedangkan saldo Anda adalah Rp ${buyerBalance.toLocaleString('id-ID')}. Silakan klik tombol "Top Up Saldo" di bagian dompet.`);
       return;
     }
 
@@ -261,6 +323,12 @@ export default function BuyerDashboard({
     }
 
     // If free of conflicts, proceed to register the booking safely!
+    const rawTicketPriceSum = ticketQty * baseTicketPrice;
+    const calculatedMovieDiscountSum = Math.round(ticketQty * baseTicketPrice * (movieDiscountPercent / 100));
+    const freeQty = selectedMovie.isB1G1 ? Math.floor(ticketQty / 2) : 0;
+    const calculatedB1g1DiscountSum = selectedMovie.isB1G1 ? Math.round(freeQty * ticketPriceAfterMovieDiscount) : 0;
+    const calculatedVoucherDiscountSum = Math.max(0, Math.round(costBeforeVoucher) - totalCost);
+
     const newBooking: Booking = {
       id: `book-${Date.now()}`,
       userId: currentUser.id,
@@ -271,8 +339,30 @@ export default function BuyerDashboard({
       showtime: selectedScheduleObj.showtime,
       seats: [...selectedSeats],
       pricePaid: totalCost,
-      bookingDate: new Date().toISOString()
+      bookingDate: new Date().toISOString(),
+      movieDiscountAmount: calculatedMovieDiscountSum,
+      voucherDiscountAmount: calculatedVoucherDiscountSum,
+      voucherCodeUsed: appliedVoucher ? appliedVoucher.code : undefined,
+      isB1G1Applied: selectedMovie.isB1G1 || false,
+      b1g1DiscountAmount: calculatedB1g1DiscountSum
     };
+
+    // Redeemed the checkout coupon permanently from database
+    if (appliedVoucher) {
+      const updatedVouchers = vouchers.map(v => {
+        if (v.id === appliedVoucher.id) {
+          return {
+            ...v,
+            isRedeemed: true,
+            redeemedBy: currentUser.name,
+            redeemedAt: new Date().toISOString()
+          };
+        }
+        return v;
+      });
+      setVouchers(updatedVouchers);
+      localStorage.setItem('cinema_db_vouchers', JSON.stringify(updatedVouchers));
+    }
 
     // Deduct Balance
     const remainingBalance = buyerBalance - totalCost;
@@ -285,8 +375,12 @@ export default function BuyerDashboard({
     localStorage.setItem('cinema_db_bookings', JSON.stringify(currentBookings));
     localStorage.setItem('cinema_bookings', JSON.stringify(currentBookings));
 
-    // Clear seat selection & focus
+    // Clear seat selection & focus & checkout coupon session
     setSelectedSeats([]);
+    setAppliedVoucher(null);
+    setDiscountCodeInput('');
+    setCouponErrorMessage('');
+    
     setSuccessAlert('Selamat! Pemesanan kursi bioskop berhasil diproses secara resmi.');
     
     // Open print preview/receipt modal
@@ -499,6 +593,19 @@ export default function BuyerDashboard({
                           <span className="absolute top-3 left-3 bg-blue-900 border border-blue-800 text-white text-[9px] font-bold px-2.5 py-1 rounded-full uppercase tracking-wider block">
                             {m.genre}
                           </span>
+
+                          <div className="absolute top-3 right-3 flex flex-col gap-1 text-right items-end pointer-events-none">
+                            {m.isB1G1 && (
+                              <span className="bg-emerald-600 border border-emerald-500 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-md shadow-sm uppercase animate-pulse">
+                                ⚡ B1G1 PROMO
+                              </span>
+                            )}
+                            {m.discountPercent ? (
+                              <span className="bg-amber-500 border border-amber-400 text-white text-[9px] font-bold px-2.5 py-0.5 rounded-md shadow-sm uppercase">
+                                DISKON {m.discountPercent}%
+                              </span>
+                            ) : null}
+                          </div>
                         </div>
 
                         {/* Details */}
@@ -783,6 +890,114 @@ export default function BuyerDashboard({
                     </div>
                   </div>
 
+                  {/* Promo & Discount Voucher checkout card */}
+                  <div className="mt-6 pt-5 border-t border-slate-100 grid grid-cols-1 md:grid-cols-2 gap-4 items-start">
+                    {/* Enter coupon discount form */}
+                    <div className="bg-slate-50 border border-slate-100 p-4 rounded-xl space-y-2">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block">🎁 Gunakan/Klaim Kupon Promo</span>
+                      {appliedVoucher ? (
+                        <div className="flex items-center justify-between bg-amber-50 border border-amber-200 px-3 py-2 rounded-lg text-xs">
+                          <div className="min-w-0">
+                            <span className="font-mono font-bold text-amber-700 block text-[11px] truncate">{appliedVoucher.code}</span>
+                            <span className="text-[10px] text-slate-500 block">
+                              Terpasang: {appliedVoucher.discountPercent ? `Diskon ${appliedVoucher.discountPercent}%` : `Diskon Flat Rp ${appliedVoucher.amount.toLocaleString('id-ID')}`}
+                            </span>
+                          </div>
+                          <button
+                            type="button"
+                            onClick={handleRemoveDiscountCode}
+                            className="text-red-500 hover:text-red-700 font-bold text-[10px] uppercase pl-2 shrink-0 cursor-pointer"
+                          >
+                            Batal
+                          </button>
+                        </div>
+                      ) : (
+                        <form onSubmit={handleApplyDiscountCode} className="space-y-2">
+                          <div className="flex gap-2">
+                            <input
+                              type="text"
+                              value={discountCodeInput}
+                              onChange={(e) => setDiscountCodeInput(e.target.value)}
+                              placeholder="Contoh: DISKON30 atau PROMOFILM"
+                              className="bg-white border border-slate-200 px-3 py-1.5 text-xs rounded-lg outline-none focus:border-blue-900 flex-grow font-mono font-bold uppercase text-slate-800"
+                            />
+                            <button
+                              type="submit"
+                              className="bg-slate-800 hover:bg-slate-900 text-white px-3 py-1.5 text-xs font-semibold rounded-lg shrink-0 cursor-pointer"
+                            >
+                              Gunakan
+                            </button>
+                          </div>
+                          {couponErrorMessage && (
+                            <p className="text-[10px] text-red-600 font-medium">{couponErrorMessage}</p>
+                          )}
+                        </form>
+                      )}
+                    </div>
+
+                    <div className="bg-blue-900/5 border border-blue-900/10 p-4 rounded-xl space-y-2 text-right">
+                      <span className="text-[10px] font-bold text-slate-500 uppercase tracking-wider block text-left md:text-right">Rincian Perhitungan Tiket</span>
+                      
+                      <div className="text-xs space-y-1 text-slate-600 font-sans">
+                        <div className="flex justify-between md:justify-end gap-4">
+                          <span>Harga Tiket ({ticketQty} tiket):</span>
+                          <span className="font-mono text-slate-700">Rp {(ticketQty * selectedScheduleObj.price).toLocaleString('id-ID')}</span>
+                        </div>
+
+                        {selectedMovie.discountPercent ? (
+                          <div className="flex justify-between md:justify-end gap-4 text-emerald-600 font-semibold animate-pulse">
+                            <span>Promo Film ({selectedMovie.discountPercent}% OFF):</span>
+                            <span className="font-mono">- Rp {Math.round(ticketQty * selectedScheduleObj.price * (selectedMovie.discountPercent / 100)).toLocaleString('id-ID')}</span>
+                          </div>
+                        ) : null}
+
+                        {selectedMovie.isB1G1 && ticketQty >= 2 ? (
+                          <div className="flex justify-between md:justify-end gap-4 text-emerald-600 font-bold bg-emerald-50 px-2 py-1 rounded-lg animate-pulse inline-flex self-end mt-1 text-[11px] border border-emerald-200">
+                            <span>Beli 1 Gratis 1 (B1G1) - Gratis {Math.floor(ticketQty / 2)} Tiket:</span>
+                            <span className="font-mono pl-2">- Rp {Math.round(Math.floor(ticketQty / 2) * (selectedScheduleObj.price * (1 - (selectedMovie.discountPercent || 0) / 100))).toLocaleString('id-ID')}</span>
+                          </div>
+                        ) : selectedMovie.isB1G1 ? (
+                          <div className="text-[10px] text-amber-600 font-semibold block text-left md:text-right py-0.5">
+                            💡 Tambah jumlah tiket menjadi [2] atau lebih untuk klaim promo Beli 1 Gratis 1!
+                          </div>
+                        ) : null}
+
+                        {appliedVoucher ? (
+                          <div className="flex justify-between md:justify-end gap-4 text-emerald-600 font-semibold">
+                            <span>Kupon ({appliedVoucher.code}):</span>
+                            <span className="font-mono">
+                              {appliedVoucher.discountPercent 
+                                ? `-${appliedVoucher.discountPercent}%` 
+                                : `- Rp ${appliedVoucher.amount.toLocaleString('id-ID')}`}
+                            </span>
+                          </div>
+                        ) : null}
+
+                        <div className="flex justify-between md:justify-end gap-4 pt-1.5 border-t border-slate-200/60 font-bold text-sm">
+                          <span className="text-slate-800">Total Pembayaran:</span>
+                          <span className="font-mono text-amber-600">
+                            Rp {(() => {
+                              const bPrice = selectedScheduleObj.price;
+                              const mPct = selectedMovie.discountPercent || 0;
+                              const tPrice = bPrice * (1 - mPct / 100);
+                              const pQty = selectedMovie.isB1G1 ? Math.ceil(ticketQty / 2) : ticketQty;
+                              const subTotal = pQty * tPrice;
+                              let total = subTotal;
+                              if (appliedVoucher) {
+                                if (appliedVoucher.discountPercent) {
+                                  total = subTotal * (1 - appliedVoucher.discountPercent / 100);
+                                } else if (appliedVoucher.amount) {
+                                  total = Math.max(0, subTotal - appliedVoucher.amount);
+                                }
+                              }
+                              return Math.round(total).toLocaleString('id-ID');
+                            })()}
+                          </span>
+                        </div>
+                      </div>
+                    </div>
+                  </div>
+
                   {/* Dynamic checkout and cost visualizer */}
                   <div className="pt-6 border-t border-slate-100 flex flex-col sm:flex-row justify-between items-start sm:items-center gap-4 mt-8">
                     
@@ -791,15 +1006,14 @@ export default function BuyerDashboard({
                       <p className="font-mono text-xs font-bold text-blue-900 mt-0.5">
                         {selectedSeats.length > 0 ? selectedSeats.join(', ') : 'Belum memilih kursi'}
                       </p>
-                      
-                      <div className="flex gap-4 text-xs font-semibold mt-3 text-slate-500 font-sans">
-                        <span>Tiket: {ticketQty} x Rp {selectedScheduleObj.price.toLocaleString('id-ID')}</span>
-                        <span>Total: <strong className="text-amber-600 font-mono text-sm leading-none">Rp {(ticketQty * selectedScheduleObj.price).toLocaleString('id-ID')}</strong></span>
-                      </div>
+                      <p className="text-[10px] text-slate-500 mt-1">
+                        Sisa wajib pilih: {ticketQty - selectedSeats.length} kursi lagi
+                      </p>
                     </div>
 
                     <div className="w-full sm:w-auto">
                       <button
+                        type="button"
                         onClick={handleCheckout}
                         disabled={selectedSeats.length !== ticketQty}
                         className={`w-full sm:w-auto px-7 py-3 text-xs font-display font-bold rounded-xl transition-all shadow-md flex items-center justify-center gap-2 ${
@@ -811,9 +1025,6 @@ export default function BuyerDashboard({
                         <Check className="w-4 h-4" />
                         <span>Selesaikan Pemesanan & Checkout</span>
                       </button>
-                      <p className="text-[10px] text-slate-400 mt-1.5 text-center sm:text-right">
-                        Sisa wajib pilih: {ticketQty - selectedSeats.length} kursi lagi
-                      </p>
                     </div>
 
                   </div>
