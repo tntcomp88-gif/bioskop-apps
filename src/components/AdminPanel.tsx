@@ -44,7 +44,7 @@ export default function AdminPanel({
   onSeedDatabase
 }: AdminPanelProps) {
   
-  const [activeTab, setActiveTab ] = useState<'profile' | 'cinemas' | 'movies' | 'schedules' | 'reports' | 'financial' | 'vouchers' | 'app-settings'>('cinemas');
+  const [activeTab, setActiveTab ] = useState<'profile' | 'cinemas' | 'movies' | 'schedules' | 'reports' | 'financial' | 'vouchers' | 'app-settings' | 'coretax'>('cinemas');
   const [reportSubTab, setReportSubTab] = useState<'financial' | 'seats'>('financial');
 
   // Custom Billing States (Tax, Royalty, Operasional percentages)
@@ -116,6 +116,47 @@ export default function AdminPanel({
   const [voucherSearch, setVoucherSearch] = useState<string>('');
   const [copiedCodeCode, setCopiedCodeCode] = useState<string | null>(null);
   const [printModalVouchers, setPrintModalVouchers] = useState<Voucher[] | null>(null);
+
+  // CoreTax DJP System Simulator States
+  const [coreTaxStatus, setCoreTaxStatus] = useState<'DRAFT' | 'API_TRANSMITTING' | 'SUBMITTED' | 'BILLING_PAYMENT' | 'PAID' | 'REPORTED'>(() => {
+    const saved = localStorage.getItem('cinema_coretax_status');
+    return (saved as any) || 'DRAFT';
+  });
+  const [coreTaxBillingCode, setCoreTaxBillingCode] = useState<string>(() => {
+    return localStorage.getItem('cinema_coretax_billing_code') || '';
+  });
+  const [coreTaxNtpn, setCoreTaxNtpn] = useState<string>(() => {
+    return localStorage.getItem('cinema_coretax_ntpn') || '';
+  });
+  const [coreTaxBpeHash, setCoreTaxBpeHash] = useState<string>(() => {
+    return localStorage.getItem('cinema_coretax_bpe_hash') || '';
+  });
+  const [apiLogs, setApiLogs] = useState<string[]>([]);
+  const [isApiLoading, setIsApiLoading] = useState<boolean>(false);
+  const [coreTaxHistory, setCoreTaxHistory] = useState<{
+    id: string;
+    masaPajak: string;
+    omzet: number;
+    nominalPajak: number;
+    billingCode: string;
+    ntpn: string;
+    bpeHash: string;
+    timestamp: string;
+  }[]>(() => {
+    const saved = localStorage.getItem('cinema_coretax_history');
+    return saved ? JSON.parse(saved) : [
+      {
+        id: "TAX-2026-04",
+        masaPajak: "Masa Pajak April 2026",
+        omzet: 24700000,
+        nominalPajak: 2470000,
+        billingCode: "820260429712345",
+        ntpn: "B09C8765A231F459",
+        bpeHash: "4f70fa0192eab890cdef6543b12399ff",
+        timestamp: "2026-05-02T04:15:30.000Z"
+      }
+    ];
+  });
 
   // Feedback timed dismisser
   const triggerFeedback = (type: 'success' | 'error', msg: string) => {
@@ -812,6 +853,21 @@ export default function AdminPanel({
                 <span className="font-bold">Laporan Keuangan</span>
               </span>
               <ChevronRight className="w-3.5 h-3.5 opacity-40" />
+            </button>
+
+            <button
+              onClick={() => setActiveTab('coretax')}
+              className={`w-full flex items-center justify-between px-4 py-3 rounded-xl transition-all font-display text-sm font-medium ${
+                activeTab === 'coretax' 
+                  ? 'bg-blue-900 border-l-4 border-amber-500 text-white shadow-sm font-bold' 
+                  : 'text-slate-600 hover:bg-slate-50'
+              }`}
+            >
+              <span className="flex items-center gap-2.5">
+                <FileText className="w-4 h-4 shrink-0 text-red-500 animate-pulse" />
+                <span className="font-bold">Simulasi CoreTax DJP</span>
+              </span>
+              <span className="bg-red-100 text-[8px] text-red-700 font-extrabold px-1.5 py-0.5 rounded-full uppercase tracking-wider scale-95">DJP API</span>
             </button>
 
             <button
@@ -3678,6 +3734,533 @@ export default function AdminPanel({
 
               </div>
             )}
+
+            {/* TAB CONTENT: CORETAX DJP COMPLIANCE PLATFORM SIMULATOR */}
+            {activeTab === 'coretax' && (() => {
+              // Derived values for the current CoreTax filling month
+              const coreTaxGrossRevenue = bookings.reduce((sum, b) => sum + (b.pricePaid || 0), 0);
+              const coreTaxAmountDue = Math.round(coreTaxGrossRevenue * (taxRate / 100));
+
+              // Simulating the API Transmission
+              const triggerCoreTaxApiTransmission = () => {
+                setIsApiLoading(true);
+                setCoreTaxStatus('API_TRANSMITTING');
+                setApiLogs([]);
+                
+                const logs = [
+                  "🔄 [1/8] DJP INTEGRATION: Melakukan handshake kriptografi SSL dengan gateway...",
+                  "🔑 [2/8] Authorizing via client credentials... DJP-BEARER-JWT divalidasi.",
+                  "📝 [3/8] Menyiapkan payload XML/JSON PPN Masa Pajak Mei 2026...",
+                  "🔍 [4/8] DJP API: Validasi NPWP '01.234.567.8-012.000' (Status Wajib Pajak: AKTIF - Patuh).",
+                  "📊 [5/8] DJP API: Rekonsiliasi akuntansi (Omzet Gross: Rp " + coreTaxGrossRevenue.toLocaleString('id-ID') + ", PPN Terutang (" + taxRate + "%): Rp " + coreTaxAmountDue.toLocaleString('id-ID') + ").",
+                  "💾 [6/8] DJP API: Menyimpan e-Faktur Pajak Masa Mei 2026 di Sistem Cloud DJP pusat...",
+                  "🎫 [7/8] DJP API: Mengonfirmasi kesesuaian SPT Masa & menerbitkan Kode e-Billing...",
+                  "🚀 [8/8] DJP API: Sinkronisasi tuntas! HTTP 201 Created. Kode billing siap dibayar."
+                ];
+
+                let currentLogIndex = 0;
+                const interval = setInterval(() => {
+                  if (currentLogIndex < logs.length) {
+                    setApiLogs(prev => [...prev, logs[currentLogIndex]]);
+                    currentLogIndex++;
+                  } else {
+                    clearInterval(interval);
+                    setIsApiLoading(false);
+                    const generatedBilling = Math.floor(100000000000000 + Math.random() * 900000000000000).toString();
+                    setCoreTaxBillingCode(generatedBilling);
+                    localStorage.setItem('cinema_coretax_billing_code', generatedBilling);
+                    setCoreTaxStatus('BILLING_PAYMENT');
+                    localStorage.setItem('cinema_coretax_status', 'BILLING_PAYMENT');
+                    triggerFeedback('success', "API DJP berhasil terhubung! Kode Billing berhasil diterbitkan oleh CoreTax.");
+                  }
+                }, 750);
+              };
+
+              // Simulating the Bank Persepsi Payment
+              const processCoreTaxPayment = () => {
+                setIsApiLoading(true);
+                setTimeout(() => {
+                  const generatedNtpn = "NTPN-" + Math.random().toString(36).substring(2, 10).toUpperCase() + Math.floor(1000 + Math.random() * 9000);
+                  setCoreTaxNtpn(generatedNtpn);
+                  localStorage.setItem('cinema_coretax_ntpn', generatedNtpn);
+                  setCoreTaxStatus('PAID');
+                  localStorage.setItem('cinema_coretax_status', 'PAID');
+                  setIsApiLoading(false);
+                  triggerFeedback('success', "Pajak PPN senilai Rp " + coreTaxAmountDue.toLocaleString('id-ID') + " berhasil dilunasi ke Kas Negara!");
+                }, 1200);
+              };
+
+              // Simulating final reporting step
+              const finaliseCoreTaxReporting = () => {
+                setIsApiLoading(true);
+                setTimeout(() => {
+                  const hash = "BPE-" + Math.random().toString(36).substring(2, 12).toUpperCase() + "-" + Date.now().toString().slice(-4);
+                  setCoreTaxBpeHash(hash);
+                  localStorage.setItem('cinema_coretax_bpe_hash', hash);
+                  setCoreTaxStatus('REPORTED');
+                  localStorage.setItem('cinema_coretax_status', 'REPORTED');
+                  
+                  // Add to history
+                  const newReportLog = {
+                    id: "TAX-2026-05",
+                    masaPajak: "Masa Pajak Mei 2026",
+                    omzet: coreTaxGrossRevenue,
+                    nominalPajak: coreTaxAmountDue,
+                    billingCode: coreTaxBillingCode,
+                    ntpn: coreTaxNtpn,
+                    bpeHash: hash,
+                    timestamp: new Date().toISOString()
+                  };
+                  const updatedHistory = [newReportLog, ...coreTaxHistory];
+                  setCoreTaxHistory(updatedHistory);
+                  localStorage.setItem('cinema_coretax_history', JSON.stringify(updatedHistory));
+                  
+                  setIsApiLoading(false);
+                  triggerFeedback('success', "Kepatuhan Pajak Bulanan Sukses! Bukti Penerimaan Elektronik (BPE) resmi telah diterbitkan.");
+                }, 1250);
+              };
+
+              // Safe reset for demonstration
+              const resetCoreTaxDemo = () => {
+                setCoreTaxStatus('DRAFT');
+                setCoreTaxBillingCode('');
+                setCoreTaxNtpn('');
+                setCoreTaxBpeHash('');
+                setApiLogs([]);
+                localStorage.setItem('cinema_coretax_status', 'DRAFT');
+                localStorage.removeItem('cinema_coretax_billing_code');
+                localStorage.removeItem('cinema_coretax_ntpn');
+                localStorage.removeItem('cinema_coretax_bpe_hash');
+                triggerFeedback('success', "Simulator CoreTax berhasil di-reset untuk pengujian ulang!");
+              };
+
+              return (
+                <div className="space-y-6 animate-fade-in text-slate-800">
+                  {/* Government Style Header */}
+                  <div className="bg-gradient-to-r from-blue-900 to-slate-800 rounded-2xl p-5 md:p-6 text-white border border-blue-950 relative overflow-hidden shadow-md flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div className="absolute right-0 top-0 opacity-10 text-9xl transform translate-x-12 translate-y-8 select-none pointer-events-none">印</div>
+                    <div className="space-y-1.5 max-w-xl">
+                      <div className="flex items-center gap-2">
+                        <span className="bg-amber-400 text-slate-900 text-[9px] font-extrabold px-2 py-0.5 rounded tracking-wider uppercase font-mono">DJP CoreTax System</span>
+                        <span className="text-slate-300 font-mono text-[10px]">• Portal Kepatuhan Pajak Mandiri</span>
+                      </div>
+                      <h2 className="font-display text-xl font-bold tracking-tight text-white">
+                        Pusat Integrasi & Pelaporan Pajak CoreTax DJP
+                      </h2>
+                      <p className="text-xs text-slate-300 leading-relaxed font-sans">
+                        Sistem simulasi kepatuhan pajak bioskop dengan menyajikan visualisasi e-Faktur terintegrasi API DJP (Direktorat Jenderal Pajak). Hitung, terbitkan kode e-Billing negara, bayar via bank persepsi, dan dapatkan Bukti Penerimaan Elektronik (BPE).
+                      </p>
+                    </div>
+                    <button
+                      type="button"
+                      onClick={resetCoreTaxDemo}
+                      className="px-3.5 py-1.5 self-start md:self-center bg-white/10 hover:bg-white/20 active:scale-[0.97] transition-all rounded-lg text-white font-mono text-[11px] font-bold border border-white/25 cursor-pointer flex items-center gap-1.5"
+                    >
+                      <RotateCcw className="w-3.5 h-3.5" />
+                      <span>Ulangi Alur Simulasi</span>
+                    </button>
+                  </div>
+
+                  {/* STEPPER PROGRESS */}
+                  <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 grid grid-cols-2 md:grid-cols-4 gap-3 text-center">
+                    <div className={`p-2.5 rounded-lg border transition-all ${coreTaxStatus === 'DRAFT' ? 'bg-white border-blue-500 shadow-tiny text-blue-900 font-bold' : 'bg-transparent border-transparent text-slate-400'}`}>
+                      <span className="block text-[10px] font-bold font-mono uppercase tracking-wider mb-0.5">Langkah 1</span>
+                      <span className="text-xs font-bold font-display block font-sans">Rekonsiliasi & Hitung</span>
+                    </div>
+                    <div className={`p-2.5 rounded-lg border transition-all ${coreTaxStatus === 'API_TRANSMITTING' || coreTaxStatus === 'SUBMITTED' ? 'bg-white border-blue-500 shadow-tiny text-blue-900 font-bold' : 'bg-transparent border-transparent text-slate-400'} ${coreTaxStatus !== 'DRAFT' && coreTaxStatus !== 'API_TRANSMITTING' ? 'text-emerald-600 font-semibold' : ''}`}>
+                      <span className="block text-[10px] font-bold font-mono uppercase tracking-wider mb-0.5">Langkah 2</span>
+                      <span className="text-xs font-bold font-display block font-sans">{coreTaxStatus !== 'DRAFT' && coreTaxStatus !== 'API_TRANSMITTING' ? '✓ API Terkirim' : 'Kirim REST API'}</span>
+                    </div>
+                    <div className={`p-2.5 rounded-lg border transition-all ${coreTaxStatus === 'BILLING_PAYMENT' ? 'bg-white border-blue-500 shadow-tiny text-blue-900 font-bold' : 'bg-transparent border-transparent text-slate-400'} ${coreTaxStatus === 'PAID' || coreTaxStatus === 'REPORTED' ? 'text-emerald-600 font-bold' : ''}`}>
+                      <span className="block text-[10px] font-bold font-mono uppercase tracking-wider mb-0.5">Langkah 3</span>
+                      <span className="text-xs font-bold font-display block font-sans">Pembayaran Billing</span>
+                    </div>
+                    <div className={`p-2.5 rounded-lg border transition-all ${coreTaxStatus === 'REPORTED' ? 'bg-white border-blue-500 shadow-tiny text-blue-900 font-bold' : 'bg-transparent border-transparent text-slate-400'}`}>
+                      <span className="block text-[10px] font-bold font-mono uppercase tracking-wider mb-0.5">Langkah 4</span>
+                      <span className="text-xs font-bold font-display block font-sans">Selesai & Bukti BPE</span>
+                    </div>
+                  </div>
+
+                  <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
+                    
+                    {/* LEFT PANEL: ACTIVE PROCESS */}
+                    <div className="lg:col-span-7 space-y-6">
+                      
+                      {/* STEP 1: CALCULATE DRAFT TAX */}
+                      {coreTaxStatus === 'DRAFT' && (
+                        <div className="bg-white border border-slate-150 rounded-xl p-5 space-y-4 shadow-tiny">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 bg-blue-900 text-white rounded-full flex items-center justify-center text-[11px] font-mono font-bold">1</span>
+                            <h3 className="font-display font-bold text-sm text-slate-800">Hitung Nilai Pajak Terutang (Masa Pajak Berjalan)</h3>
+                          </div>
+                          
+                          <p className="text-xs text-slate-500 leading-normal font-sans">
+                            Berdasarkan realisasi seluruh penjualan tiket film bioskop yang terdaftar di sistem database saat ini, berikut adalah rincian omzet bruto serta beban PPN Daerah ({taxRate}%) yang terutang dan harus dilaporkan kepada Direktorat Jenderal Pajak:
+                          </p>
+
+                          <div className="bg-slate-50 rounded-xl p-4 border border-slate-100 space-y-3">
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Masa Pajak Terdaftar</span>
+                              <span className="font-bold font-mono">Mei 2026</span>
+                            </div>
+                            <div className="border-t border-slate-200/60 my-2"></div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Jumlah Transaksi Beli Tiket</span>
+                              <span className="font-bold font-mono">{bookings.length} Transaksi</span>
+                            </div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-slate-500">Total Omzet Bruto (Gross)</span>
+                              <span className="font-bold font-mono text-slate-900">Rp {coreTaxGrossRevenue.toLocaleString('id-ID')}</span>
+                            </div>
+                            <div className="border-t border-slate-200/60 my-2"></div>
+                            <div className="flex items-center justify-between text-xs">
+                              <span className="text-blue-900 font-bold">Pajak Negara PB1 / PPN Terutang ({taxRate}%)</span>
+                              <span className="font-mono font-extrabold text-red-600 text-sm">Rp {coreTaxAmountDue.toLocaleString('id-ID')}</span>
+                            </div>
+                          </div>
+
+                          <div className="bg-amber-50 border border-amber-200 p-3 rounded-lg flex items-start gap-2.5">
+                            <AlertCircle className="w-4 h-4 text-amber-600 shrink-0 mt-0.5" />
+                            <div className="text-[10.5px] text-amber-800 leading-relaxed font-sans">
+                              <strong>Instruksi Alur API:</strong> Untuk mendaftarkan pelaporan pajak ini ke server DJP pusat secara digital, Anda harus mentransfer payload data berformat JSON ke endpoint CoreTax DJP API. Silakan tekan tombol kirim di bawah untuk melakukan simulasi integrasi API asinkronus secara digital.
+                            </div>
+                          </div>
+
+                          <button
+                            type="button"
+                            disabled={coreTaxGrossRevenue === 0}
+                            onClick={triggerCoreTaxApiTransmission}
+                            style={{ cursor: coreTaxGrossRevenue === 0 ? 'not-allowed' : 'pointer' }}
+                            className={`w-full py-3 ${coreTaxGrossRevenue === 0 ? 'bg-slate-350' : 'bg-blue-650 hover:bg-blue-700 active:scale-[0.99]'} text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm text-center font-display font-sans`}
+                          >
+                            <FileText className="w-4 h-4 text-amber-400" />
+                            <span>KIRIM DATA SPT MASA VIA DJP REST API</span>
+                          </button>
+                          
+                          {coreTaxGrossRevenue === 0 && (
+                            <p className="text-[10px] text-red-500 text-center font-semibold font-sans">
+                              ⚠️ Tidak ada transaksi tiket masuk untuk dihitung nilai pajaknya! Harap beli tiket via Dashboard Pembeli terlebih dahulu.
+                            </p>
+                          )}
+                        </div>
+                      )}
+
+                      {/* STEP 2: API TRANSMITTING LOGGER */}
+                      {coreTaxStatus === 'API_TRANSMITTING' && (
+                        <div className="bg-white border border-slate-150 rounded-xl p-5 space-y-4 shadow-tiny">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 bg-blue-900 text-white rounded-full flex items-center justify-center text-[11px] font-mono font-bold">2</span>
+                            <h3 className="font-display font-bold text-sm text-slate-800">Mentransfer Data SPT Pajak (Aktivitas Real-time API)</h3>
+                          </div>
+
+                          <div className="flex items-center gap-3 p-4 bg-blue-50 border border-blue-100 rounded-xl">
+                            <div className="w-4 h-4 border-2 border-blue-900 border-t-transparent rounded-full animate-spin"></div>
+                            <span className="text-xs text-blue-900 font-mono font-semibold">Menghubungi endpoint https://api.pajak.go.id/v1/spt/mei-2026 ...</span>
+                          </div>
+
+                          <div className="bg-slate-900 text-slate-200 font-mono text-[10.5px] p-4 rounded-xl space-y-2 h-48 overflow-y-auto border border-slate-800 shadow-inner">
+                            {apiLogs.map((log, index) => (
+                              <div key={index} className="animate-fade-in text-emerald-400 font-mono">
+                                {log}
+                              </div>
+                            ))}
+                            <span className="block w-2 h-4 bg-emerald-400 animate-pulse inline-block"></span>
+                          </div>
+                          
+                          <p className="text-[10px] text-slate-400 italic text-center text-xs font-sans">
+                            Menguji ketahanan model, integrasi webhook, keamanan enkripsi payload, dan skema respons.
+                          </p>
+                        </div>
+                      )}
+
+                      {/* STEP 3: BILLING PAYMENT STATUS */}
+                      {coreTaxStatus === 'BILLING_PAYMENT' && (
+                        <div className="bg-white border border-slate-150 rounded-xl p-5 space-y-4 shadow-tiny">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 bg-blue-900 text-white rounded-full flex items-center justify-center text-[11px] font-mono font-bold">3</span>
+                            <h3 className="font-display font-bold text-sm text-slate-800">Surat Setoran Elektronik (SSE) & Tagihan Pajak Negara</h3>
+                          </div>
+
+                          <p className="text-xs text-slate-500 leading-normal font-sans">
+                            Data e-Faktur/SPT telah masuk dan terdaftar di log coretax DJP. Silakan lakukan pembayaran tagihan pajak negara senilai nominal di bawah ke rekening Kas Negara menggunakan Kode e-Billing resmi:
+                          </p>
+
+                          {/* BILLING SLIP */}
+                          <div className="border border-amber-300 bg-amber-50/40 rounded-xl p-4 space-y-3 relative overflow-hidden">
+                            <div className="absolute right-2 top-2 text-3xl opacity-20 filter grayscale text-amber-700">🧾</div>
+                            <span className="text-[9px] bg-amber-400 text-slate-900 font-extrabold px-1.5 py-0.5 rounded tracking-wider uppercase font-mono">ID KODE BILLING NEGARA</span>
+                            
+                            <div className="my-1.5">
+                              <span className="block text-[10px] text-slate-500 uppercase">KODE BILLING</span>
+                              <span className="text-2xl font-mono font-bold tracking-widest text-slate-900">{coreTaxBillingCode}</span>
+                            </div>
+
+                            <div className="grid grid-cols-2 gap-4 text-xs font-sans">
+                              <div>
+                                <span className="block text-[10px] text-slate-500 uppercase font-bold">Wajib Pajak (Cinema)</span>
+                                <span className="font-semibold">{branding.appName} Global</span>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-slate-500 uppercase font-bold text-slate-400">NPWP</span>
+                                <span className="font-mono font-semibold">01.234.567.8-012.000</span>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-slate-500 uppercase font-bold text-slate-400">Masa Pajak / MAP</span>
+                                <span className="font-semibold">Mei 2026 / 411124 (PPN)</span>
+                              </div>
+                              <div>
+                                <span className="block text-[10px] text-slate-500 uppercase font-bold text-slate-400">Jumlah yang Harus Dibayar</span>
+                                <span className="font-mono font-bold text-red-600">Rp {coreTaxAmountDue.toLocaleString('id-ID')}</span>
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 border p-3 rounded-lg text-xs space-y-1 text-slate-600 font-sans">
+                            <strong>Alur Penyetoran Negara:</strong>
+                            <p className="text-[11px] leading-relaxed">
+                              Pembayaran ini menggunakan integrasi multipihak MPN G3 (Modul Penerimaan Negara Generasi 3) secara elektronik. Ketika tombol bayar diklik, sistem akan mengirimkan instruksi debet langsung ke Bank Persepsi BUMN untuk melunasi tagihan pajak kasir bioskop.
+                            </p>
+                          </div>
+
+                          {isApiLoading ? (
+                            <div className="w-full py-3 bg-slate-150 border rounded-xl font-bold font-display text-xs text-slate-500 flex items-center justify-center gap-2 font-sans">
+                              <div className="w-4 h-4 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div>
+                              <span>Memproses Debet Saldo ke Kas Negara...</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={processCoreTaxPayment}
+                              className="w-full py-3 bg-emerald-600 hover:bg-emerald-700 active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm text-center font-display font-sans cursor-pointer"
+                            >
+                              <Coins className="w-4 h-4 text-emerald-250 animate-pulse" />
+                              <span>BAYAR PAJAK VIA BANK PERSEPSI NEGARA (SIMULASI DEBET)</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* STEP 4: STATE TAX PAID - FINALISE SUBMISSION */}
+                      {coreTaxStatus === 'PAID' && (
+                        <div className="bg-white border border-slate-150 rounded-xl p-5 space-y-4 shadow-tiny">
+                          <div className="flex items-center gap-2">
+                            <span className="w-5 h-5 bg-blue-900 text-white rounded-full flex items-center justify-center text-[11px] font-mono font-bold">4</span>
+                            <h3 className="font-display font-bold text-sm text-slate-800">Pelunasan Pajak Berhasil (State Receipt Verified)</h3>
+                          </div>
+
+                          <div className="p-4 bg-emerald-50 border border-emerald-100 rounded-xl flex items-center gap-3 font-sans">
+                            <div className="w-8 h-8 rounded-full bg-emerald-100 flex items-center justify-center text-emerald-600 font-bold shrink-0 text-sm">✓</div>
+                            <div>
+                              <p className="text-xs font-bold text-emerald-800 font-sans">Bukti Penerimaan Negara (BPN) Berhasil Divalidasi</p>
+                              <p className="text-[11px] text-slate-500 font-sans">Nomor Transaksi Penerimaan Negara (NTPN) diterbitkan secara instan oleh kementerian keuangan.</p>
+                            </div>
+                          </div>
+
+                          <div className="bg-slate-50 border rounded-xl p-4 text-xs font-mono space-y-2">
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 text-[10px] font-mono">NOMOR SAKTI NTPN:</span>
+                              <span className="font-bold text-slate-800 tracking-wider font-mono">{coreTaxNtpn}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 text-[10px] font-mono">TANGGAL SETOR:</span>
+                              <span className="font-mono text-slate-800">{new Date().toLocaleDateString('id-ID')}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 text-[10px] font-mono">NOMINAL DISALURKAN:</span>
+                              <span className="font-bold text-emerald-650 font-mono">Rp {coreTaxAmountDue.toLocaleString('id-ID')}</span>
+                            </div>
+                            <div className="flex justify-between">
+                              <span className="text-slate-500 text-[10px] font-mono">TUJUAN RECEIPT:</span>
+                              <span className="font-mono">KAS NEGARA INDONESIA (DJP-MEI-2026)</span>
+                            </div>
+                          </div>
+
+                          <p className="text-xs leading-relaxed text-slate-500 font-sans">
+                            Pajak bioskop Anda PPN / PB1 sebesar <strong>Rp {coreTaxAmountDue.toLocaleString('id-ID')}</strong> telah divalidasi lunas secara legal dari kas internal Anda. Langkah terakhir adalah menerbitkan Sertifikat Pelaporan SPT Pajak dari server CoreTax pusat guna mendapatkan status wajib pajak patuh.
+                          </p>
+
+                          {isApiLoading ? (
+                            <div className="w-full py-3 bg-slate-150 border rounded-xl font-bold font-display text-xs text-slate-500 flex items-center justify-center gap-2 font-sans">
+                              <div className="w-4 h-4 border-2 border-slate-500 border-t-transparent rounded-full animate-spin"></div>
+                              <span>Memverifikasi Akhir Laporan SPT & Menerbitkan BPE...</span>
+                            </div>
+                          ) : (
+                            <button
+                              type="button"
+                              onClick={finaliseCoreTaxReporting}
+                              className="w-full py-3 bg-blue-900 hover:bg-blue-950 active:scale-[0.99] text-white rounded-xl text-xs font-bold transition-all flex items-center justify-center gap-1.5 shadow-sm text-center font-display font-sans cursor-pointer"
+                            >
+                              <FileText className="w-4 h-4 text-amber-400" />
+                              <span>PROSES AKHIR LAPORAN & TERBITKAN BUKTI BPE</span>
+                            </button>
+                          )}
+                        </div>
+                      )}
+
+                      {/* STEP 5: COMPLIANCE ARCHIVED (REPORTED STATUS) */}
+                      {coreTaxStatus === 'REPORTED' && (
+                        <div className="bg-white border border-slate-150 rounded-xl p-5 space-y-4 shadow-tiny">
+                          <div className="flex items-center justify-between">
+                            <div className="flex items-center gap-2">
+                              <span className="w-5 h-5 bg-emerald-600 text-white rounded-full flex items-center justify-center text-[11px] font-mono font-bold">✓</span>
+                              <h3 className="font-display font-bold text-sm text-emerald-800">E-Filing Masa Pajak Selesai & Berhasil</h3>
+                            </div>
+                            <span className="bg-emerald-100 text-[8.5px] text-emerald-700 font-extrabold px-2 py-0.5 rounded-full uppercase tracking-wider font-mono">Patuh Pajak</span>
+                          </div>
+
+                          {/* BPE OFFICIAL SLIP RECEIPT */}
+                          <div className="border-2 border-slate-800 p-5 bg-stone-50 rounded-xl space-y-4 font-mono text-[11px] relative shadow-md">
+                            <div className="absolute right-4 top-4 border-2 border-emerald-600 rounded-lg p-1 text-center transform rotate-6 scale-90 select-none bg-white font-mono">
+                              <span className="block text-[8px] font-bold text-emerald-600 font-mono">DJP DJP DJP</span>
+                              <span className="block text-[10px] font-black text-emerald-600 font-mono uppercase tracking-wider">RECEIVED</span>
+                              <span className="block text-[7px] text-slate-400 font-mono font-normal">CoreTax Approved</span>
+                            </div>
+
+                            <div className="text-center font-sans border-b border-dashed border-slate-305 pb-3">
+                              <p className="font-bold text-xs">DIREKTORAT JENDERAL PAJAK</p>
+                              <p className="text-[9px] text-slate-500 uppercase tracking-widest mt-0.5 font-bold">BUKTI PENERIMAAN ELEKTRONIK (BPE)</p>
+                            </div>
+
+                            <div className="space-y-1.5 leading-relaxed pt-2 text-slate-755 font-mono">
+                              <p>NAMA WAJIB PAJAK : <span className="font-bold">{branding.appName.toUpperCase()} GLOBAL CINEMA</span></p>
+                              <p>NPWP            : <span className="font-bold">01.234.567.8-012.000</span></p>
+                              <p>MASA / TAHUN PJ  : <span className="font-bold">05 / 2026</span></p>
+                              <p>JENIS PAJAK     : <span className="font-bold">PPN DALAM NEGERI (JASA TIKET)</span></p>
+                              <p>KODE BILLING    : <span className="font-bold">{coreTaxBillingCode}</span></p>
+                              <p>NTPN SEBELUMNYA : <span className="font-bold">{coreTaxNtpn}</span></p>
+                              <p>NOMINAL SETOR   : <span className="font-bold text-emerald-700">Rp {coreTaxAmountDue.toLocaleString('id-ID')}</span></p>
+                              <p>STATUS SPT      : <span className="font-bold text-emerald-700">[NIHIL - SELESAI SINKRONISASI]</span></p>
+                            </div>
+
+                            <div className="border-t border-dashed border-slate-300 pt-3 flex flex-col md:flex-row items-center justify-between gap-4 font-sans text-[10px]">
+                              <div>
+                                <p className="text-[9px] text-slate-450 text-slate-400">Security Verification Code (SHA-1):</p>
+                                <p className="font-mono text-[9px] text-slate-600 font-bold select-all break-all">{coreTaxBpeHash}</p>
+                              </div>
+                              <div className="w-12 h-12 bg-white border border-slate-200 flex items-center justify-center font-mono text-[6px] text-slate-400 text-center uppercase tracking-tighter shrink-0 select-none font-bold">
+                                QR CODE VERIFIKASI DJP
+                              </div>
+                            </div>
+                          </div>
+
+                          <div className="p-3 bg-blue-50 border border-blue-100 rounded-xl text-xs flex items-start gap-2.5 font-sans">
+                            <span className="text-xl">🎉</span>
+                            <div className="text-blue-900 leading-relaxed font-sans">
+                              <strong>Kepatuhan Bulanan Tercapai!</strong> Bioskop Anda telah menunaikan kewajiban kenegaraan secara otomatis menggunakan alur API sistem CoreTax. Anda patuh terhadap regulasi pajak pusat dan daerah sehingga operasional aman dari penalti.
+                            </div>
+                          </div>
+                        </div>
+                      )}
+
+                    </div>
+
+                    {/* RIGHT PANEL: TECHNICAL REST API SPECIFICATION DOCS & FLOW SCHEMA */}
+                    <div className="lg:col-span-5 space-y-6">
+                      
+                      {/* STATS BREAKDOWN */}
+                      <div className="bg-slate-50 border border-slate-100 rounded-xl p-4 space-y-3 font-sans">
+                        <span className="text-[9.5px] font-bold text-slate-400 uppercase tracking-widest block font-mono">STATUS KEPATUHAN PAJAK</span>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500">Status Wajib Pajak</span>
+                          <span className="text-xs font-bold font-mono px-2 py-0.5 rounded-full bg-emerald-50 text-emerald-700 border border-emerald-100">AKTIF (PATUH)</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500 font-sans">ID Perangkat Sistem</span>
+                          <span className="text-xs font-bold font-mono text-slate-700">CINE-DJP-G3X</span>
+                        </div>
+                        <div className="flex items-center justify-between">
+                          <span className="text-xs text-slate-500 font-sans">Penanggung Jawab</span>
+                          <span className="text-xs font-bold text-slate-750 font-mono">PT BIOSKOP NUSANTARA</span>
+                        </div>
+                      </div>
+
+                      {/* TECHNICAL JSON API INTERACTIVE SCHEMA PREVIEW */}
+                      <div className="bg-slate-900 text-slate-300 rounded-xl p-4 font-mono text-[10.5px] space-y-2 border border-slate-800 shadow-md">
+                        <div className="flex items-center justify-between border-b border-slate-800 pb-2 mb-2 text-slate-400 text-[9.5px]">
+                          <span>REST API REQUEST SPECIFICATION</span>
+                          <span className="bg-amber-400/25 border border-amber-400/35 text-amber-300 text-[8px] font-mono font-bold px-1 rounded uppercase tracking-wider">JSON SCHEMA</span>
+                        </div>
+                        
+                        <div className="text-slate-400 text-[10px] space-y-1">
+                          <p className="text-emerald-400"><strong className="text-slate-200 font-mono">METHOD:</strong> POST</p>
+                          <p className="text-emerald-400"><strong className="text-slate-200 font-mono">ENDPOINT:</strong> <span className="select-all block text-[9.5px] break-all bg-slate-950 p-1 rounded font-mono mt-0.5 text-blue-300">https://api.pajak.go.id/v1/spt-masa/PPN</span></p>
+                        </div>
+                        
+                        <div className="border-t border-slate-800 my-2"></div>
+                        
+                        <span className="text-[9.5px] text-slate-500 uppercase block font-semibold font-mono">PAYLOAD SENT TO CORETAX:</span>
+                        <pre className="text-slate-200 whitespace-pre-wrap select-all font-mono text-[9px] bg-slate-950 p-2 rounded max-h-48 overflow-y-auto leading-normal">
+{`{
+  "npwp": "01.234.567.8-012.000",
+  "wajib_pajak": "${branding.appName.toUpperCase()} GLOBAL CORP",
+  "masa_pajak": "05-2026",
+  "tarif_pajak_persen": ${taxRate},
+  "omzet_bruto_rp": ${coreTaxGrossRevenue},
+  "pajak_terutang_rp": ${coreTaxAmountDue},
+  "transaksi_count": ${bookings.length},
+  "metadata": {
+    "pos_version": "POS-BIOSKOP-G3.2",
+    "signature": "SHA256:${coreTaxBpeHash || 'SINKRONISASI-TERCATAT-DJP'}"
+  }
+}`}
+                        </pre>
+
+                        <div className="border-t border-slate-800 my-2"></div>
+                        <span className="text-[9px] text-slate-500 font-semibold italic block font-sans">
+                          💡 CoreTax DJP API membutuhkan parameter integrasi di atas untuk merekap data secara instan dari POS penonton ke kas negara.
+                        </span>
+                      </div>
+
+                    </div>
+
+                  </div>
+
+                  {/* REPORT HISTORY ARCHIVE FOOTER */}
+                  <div className="bg-white border border-slate-150 rounded-2xl p-5 space-y-4 shadow-tiny font-sans">
+                    <h3 className="font-display font-bold text-xs uppercase tracking-wider text-slate-500 flex items-center justify-between font-sans">
+                      <span>Arsip Pelaporan SPT Pajak Terproses (Historical compliance logs)</span>
+                      <span className="font-mono text-[10px] text-slate-450">{coreTaxHistory.length} Record Terpilih</span>
+                    </h3>
+
+                    <div className="overflow-x-auto border border-slate-100 rounded-xl">
+                      <table className="w-full text-left text-xs font-sans">
+                        <thead>
+                          <tr className="bg-slate-50 border-b border-slate-100 text-slate-500 uppercase text-[9px] font-bold font-sans">
+                            <th className="p-3">ID Log</th>
+                            <th className="p-3">Masa</th>
+                            <th className="p-3 text-right">Omzet Bruto</th>
+                            <th className="p-3 text-right">Setoran Pajak</th>
+                            <th className="p-3">Kode Billing</th>
+                            <th className="p-3 font-mono">NTPN</th>
+                            <th className="p-3">Status</th>
+                          </tr>
+                        </thead>
+                        <tbody className="divide-y divide-slate-100 font-sans">
+                          {coreTaxHistory.map((historyItem) => (
+                            <tr key={historyItem.id} className="hover:bg-slate-50 font-sans">
+                              <td className="p-3 font-mono text-[10px] font-bold text-slate-600">{historyItem.id}</td>
+                              <td className="p-3 font-medium font-sans">{historyItem.masaPajak}</td>
+                              <td className="p-3 text-right font-mono">Rp {historyItem.omzet.toLocaleString('id-ID')}</td>
+                              <td className="p-3 text-right font-mono font-semibold text-emerald-650">Rp {historyItem.nominalPajak.toLocaleString('id-ID')}</td>
+                              <td className="p-3 font-mono text-slate-500 text-[11px]">{historyItem.billingCode || '-'}</td>
+                              <td className="p-3 font-mono text-slate-500 text-[10px] uppercase">{historyItem.ntpn || '-'}</td>
+                              <td className="p-3 font-semibold text-[10px] font-sans">
+                                {historyItem.bpeHash ? (
+                                  <span className="text-emerald-700 bg-emerald-50 px-1.5 py-0.5 rounded tracking-wide border border-emerald-100 font-mono">✓ REPORTED</span>
+                                ) : (
+                                  <span className="text-amber-700 bg-amber-50 px-1.5 py-0.5 rounded tracking-wide border border-amber-100 font-sans">DRAFT</span>
+                                )}
+                              </td>
+                            </tr>
+                          ))}
+                        </tbody>
+                      </table>
+                    </div>
+                  </div>
+
+                </div>
+              );
+            })()}
 
           </main>
 
