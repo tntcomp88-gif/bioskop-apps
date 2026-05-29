@@ -1,4 +1,5 @@
 import React, { useState, useEffect } from 'react';
+import { SpeedInsights } from '@vercel/speed-insights/react';
 import { User, Movie, Cinema, Schedule, Booking, AppBranding, Voucher } from './types';
 import { 
   INITIAL_MOVIES, INITIAL_CINEMAS, INITIAL_SCHEDULES, INITIAL_BOOKINGS, 
@@ -418,7 +419,8 @@ export default function App() {
         />
       )}
 
-
+      {/* Vercel Speed Insights */}
+      <SpeedInsights />
 
     </div>
   );
