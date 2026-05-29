@@ -1,0 +1,135 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Global Safety Net
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Primitive Helpers
+    function isValidId(id) {
+      return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$');
+    }
+    
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    // Entity validator: User
+    function isValidUser(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.email is string && data.email.size() <= 100
+        && data.role is string && (data.role == "admin" || data.role == "buyer")
+        && data.balance is number && data.balance >= 0;
+    }
+
+    // Entity validator: Movie
+    function isValidMovie(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.title is string && data.title.size() <= 200
+        && data.director is string && data.director.size() <= 100
+        && data.synopsis is string && data.synopsis.size() <= 2000
+        && data.genre is string && data.genre.size() <= 100
+        && data.posterUrl is string && data.posterUrl.size() <= 2000;
+    }
+
+    // Entity validator: Cinema
+    function isValidCinema(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.name is string && data.name.size() <= 100
+        && data.rows is number && data.rows >= 1 && data.rows <= 20
+        && data.cols is number && data.cols >= 1 && data.cols <= 30
+        && data.forbiddenSeats is list;
+    }
+
+    // Entity validator: Schedule
+    function isValidSchedule(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.movieId is string && data.movieId.size() <= 128
+        && data.cinemaId is string && data.cinemaId.size() <= 128
+        && data.cinemaName is string && data.cinemaName.size() <= 100
+        && data.showtime is string && data.showtime.size() <= 100
+        && data.price is number && data.price >= 0;
+    }
+
+    // Entity validator: Booking
+    function isValidBooking(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.userId is string && data.userId.size() <= 128
+        && data.userName is string && data.userName.size() <= 100
+        && data.scheduleId is string && data.scheduleId.size() <= 128
+        && data.movieTitle is string && data.movieTitle.size() <= 200
+        && data.cinemaName is string && data.cinemaName.size() <= 100
+        && data.showtime is string && data.showtime.size() <= 100
+        && data.seats is list && data.seats.size() > 0 && data.seats.size() <= 100
+        && data.pricePaid is number && data.pricePaid >= 0
+        && data.bookingDate is string && data.bookingDate.size() <= 100;
+    }
+
+    // Entity validator: Voucher
+    function isValidVoucher(data) {
+      return data.id is string && data.id.size() <= 128
+        && data.code is string && data.code.size() <= 50
+        && data.amount is number && data.amount >= 0
+        && data.isRedeemed is bool
+        && data.createdAt is string && data.createdAt.size() <= 100;
+    }
+
+    // Entity validator: AppBranding
+    function isValidBranding(data) {
+      return data.appName is string && data.appName.size() <= 50
+        && data.appLogoChar is string && data.appLogoChar.size() <= 10
+        && data.themeColor is string && data.themeColor.size() <= 20;
+    }
+
+    // Rules for individual collections
+    
+    // 1. Users collection
+    match /users/{userId} {
+      allow read: if true;
+      allow create: if isValidUser(request.resource.data);
+      allow update: if isValidUser(request.resource.data);
+      allow delete: if false;
+    }
+
+    // 2. Movies collection
+    match /movies/{movieId} {
+      allow read: if true;
+      allow write, create, update, delete: if true;
+    }
+
+    // 3. Cinemas collection
+    match /cinemas/{cinemaId} {
+      allow read: if true;
+      allow write, create, update, delete: if true;
+    }
+
+    // 4. Schedules collection
+    match /schedules/{scheduleId} {
+      allow read: if true;
+      allow write, create, update, delete: if true;
+    }
+
+    // 5. Bookings collection
+    match /bookings/{bookingId} {
+      allow read: if true;
+      allow create: if isValidBooking(request.resource.data);
+      allow update, delete: if true;
+    }
+
+    // 6. Vouchers collection
+    match /vouchers/{voucherId} {
+      allow read: if true;
+      allow create, update: if isValidVoucher(request.resource.data);
+      allow delete: if true;
+    }
+
+    // 7. Branding document
+    match /branding/config {
+      allow read: if true;
+      allow write, update: if isValidBranding(request.resource.data);
+    }
+  }
+}

@@ -1,0 +1,6 @@
+{
+  "name": "Pemesanan Tiket Bioskop",
+  "description": "Aplikasi Progressive Web App (PWA) untuk pemesanan tiket bioskop oleh admin dan pembeli.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

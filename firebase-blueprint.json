@@ -1,0 +1,138 @@
+{
+  "entities": {
+    "User": {
+      "title": "User",
+      "description": "Represents a user account in the bioskop PWA system",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "email": { "type": "string" },
+        "role": { "type": "string", "enum": ["admin", "buyer"] },
+        "balance": { "type": "number" },
+        "phone": { "type": "string" },
+        "avatarUrl": { "type": "string" }
+      },
+      "required": ["id", "name", "email", "role", "balance"]
+    },
+    "Movie": {
+      "title": "Movie",
+      "description": "Represents an active movie available for scheduling",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "director": { "type": "string" },
+        "synopsis": { "type": "string" },
+        "genre": { "type": "string" },
+        "posterUrl": { "type": "string" }
+      },
+      "required": ["id", "title", "director", "synopsis", "genre", "posterUrl"]
+    },
+    "Cinema": {
+      "title": "Cinema",
+      "description": "Represents a cinema theater screen map layout",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "name": { "type": "string" },
+        "rows": { "type": "number" },
+        "cols": { "type": "number" },
+        "forbiddenSeats": { "type": "array" },
+        "removedSeats": { "type": "array" },
+        "aisleAfterCol": { "type": "number" },
+        "aisleAfterCol2": { "type": "number" },
+        "aisleWidth": { "type": "number" }
+      },
+      "required": ["id", "name", "rows", "cols", "forbiddenSeats"]
+    },
+    "Schedule": {
+      "title": "Schedule",
+      "description": "Represents a showtime scheduling slot for a movie in a cinema",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "movieId": { "type": "string" },
+        "cinemaId": { "type": "string" },
+        "cinemaName": { "type": "string" },
+        "showtime": { "type": "string" },
+        "price": { "type": "number" }
+      },
+      "required": ["id", "movieId", "cinemaId", "cinemaName", "showtime", "price"]
+    },
+    "Booking": {
+      "title": "Booking",
+      "description": "Represents a seat booking transaction by a buyer",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "userName": { "type": "string" },
+        "scheduleId": { "type": "string" },
+        "movieTitle": { "type": "string" },
+        "cinemaName": { "type": "string" },
+        "showtime": { "type": "string" },
+        "seats": { "type": "array" },
+        "pricePaid": { "type": "number" },
+        "bookingDate": { "type": "string" }
+      },
+      "required": ["id", "userId", "userName", "scheduleId", "movieTitle", "cinemaName", "showtime", "seats", "pricePaid", "bookingDate"]
+    },
+    "Voucher": {
+      "title": "Voucher",
+      "description": "Represents a top-up credit prepaid voucher",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "code": { "type": "string" },
+        "amount": { "type": "number" },
+        "isRedeemed": { "type": "boolean" },
+        "redeemedBy": { "type": "string" },
+        "redeemedAt": { "type": "string" },
+        "createdAt": { "type": "string" }
+      },
+      "required": ["id", "code", "amount", "isRedeemed", "createdAt"]
+    },
+    "AppBranding": {
+      "title": "AppBranding",
+      "description": "Custom color/logo/name styling configurations for the app",
+      "type": "object",
+      "properties": {
+        "appName": { "type": "string" },
+        "appLogoChar": { "type": "string" },
+        "themeColor": { "type": "string" }
+      },
+      "required": ["appName", "appLogoChar", "themeColor"]
+    }
+  },
+  "firestore": {
+    "/users/{userId}": {
+      "schema": { "$ref": "#/entities/User" },
+      "description": "User profile database"
+    },
+    "/movies/{movieId}": {
+      "schema": { "$ref": "#/entities/Movie" },
+      "description": "All scheduled cinema movies"
+    },
+    "/cinemas/{cinemaId}": {
+      "schema": { "$ref": "#/entities/Cinema" },
+      "description": "Defined movie screening theaters and layout dimensions"
+    },
+    "/schedules/{scheduleId}": {
+      "schema": { "$ref": "#/entities/Schedule" },
+      "description": "Configured showtime schedule slots"
+    },
+    "/bookings/{bookingId}": {
+      "schema": { "$ref": "#/entities/Booking" },
+      "description": "User purchases and reserved seats"
+    },
+    "/vouchers/{voucherId}": {
+      "schema": { "$ref": "#/entities/Voucher" },
+      "description": "Vouchers generated for wallet topups"
+    },
+    "/branding/config": {
+      "schema": { "$ref": "#/entities/AppBranding" },
+      "description": "App personalization settings"
+    }
+  }
+}

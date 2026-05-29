@@ -1,0 +1,22 @@
+{
+  "short_name": "CineTicket",
+  "name": "Pemesanan Tiket Bioskop PWA",
+  "description": "Aplikasi PWA Pemesanan Tiket Bioskop - Mitra Admin dan Pembeli",
+  "icons": [
+    {
+      "src": "https://picsum.photos/seed/cineticketicon192/192/192",
+      "type": "image/png",
+      "sizes": "192x192"
+    },
+    {
+      "src": "https://picsum.photos/seed/cineticketicon512/512/512",
+      "type": "image/png",
+      "sizes": "512x512"
+    }
+  ],
+  "start_url": "/",
+  "background_color": "#ffffff",
+  "theme_color": "#1e3a8a",
+  "display": "standalone",
+  "orientation": "portrait"
+}
